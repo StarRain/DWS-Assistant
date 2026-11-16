@@ -2,6 +2,24 @@ import XCTest
 @testable import DashboardCore
 
 final class ReplyLoopTests: XCTestCase {
+    func testCardSummaryEchoesRemainSuppressedAcrossRenameAndRestart() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("card-summary-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try JSONStore(directory: directory), ledger = try DeliveryLedger(store: store)
+        var conversation = Conversation()
+        conversation.profile = "corp:user"; conversation.stableID = "group-one"; conversation.replyFormat = .aiCard
+        XCTAssertTrue(try ledger.reserve("reply", route: conversation.id.uuidString))
+        try ledger.prepareReplyEcho("answer", conversation: conversation, key: "reply")
+        let reopened = try DeliveryLedger(store: store)
+        for summary in [AICardReply.summary, "AI 助手回复"] {
+            let data = try JSONSerialization.data(withJSONObject: ["message_id": UUID().uuidString, "content": summary])
+            let event = try IMEvent(line: String(decoding: data, as: UTF8.self))
+            XCTAssertTrue(reopened.isReplyEcho(event, conversation: conversation))
+            var other = conversation; other.stableID = "group-two"
+            XCTAssertFalse(reopened.isReplyEcho(event, conversation: other))
+        }
+    }
+
     private func result(_ object: [String: Any], status: Int32 = 0) throws -> CommandResult {
         CommandResult(status: status, stdout: String(decoding: try JSONSerialization.data(withJSONObject: object), as: UTF8.self), stderr: "")
     }

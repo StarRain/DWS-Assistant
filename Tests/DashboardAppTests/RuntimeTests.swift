@@ -1,6 +1,6 @@
 import XCTest
 @testable import DashboardCore
-@testable import DWSDashboard
+@testable import DWSAssistant
 
 @MainActor
 final class RuntimeTests: XCTestCase {
@@ -162,7 +162,7 @@ final class RuntimeTests: XCTestCase {
         XCTAssertEqual(count("sends", in: dir), 0)
         let final = try String(contentsOf: dir.appendingPathComponent("card-update-body"), encoding: .utf8)
         XCTAssertTrue(final.contains("已运行 1 条命令")); XCTAssertTrue(final.contains("mock answer"))
-        XCTAssertTrue(final.contains("【此消息由AI助手通过DWS自动回复】")); XCTAssertFalse(final.contains("shimmer"))
+        XCTAssertTrue(final.contains("「此消息由DWS助手通过DWS CLI自动回复」")); XCTAssertFalse(final.contains("shimmer"))
     }
 
     func testExecutionProgressUncertaintyDoesNotSendTerminalOrRecreateCard() async throws {
@@ -465,7 +465,7 @@ final class RuntimeTests: XCTestCase {
                 ], to: dir.appendingPathComponent("events.ndjson"))
                 try writeEvents([
                     ("group", "reply-new-id", "self-open", "模拟服务端转换后的回复内容"),
-                    ("at", "reply-new-at-id", "self-open", format == .aiCard ? "AI 助手回复" : "mock answer"),
+                    ("at", "reply-new-at-id", "self-open", format == .aiCard ? "DWS助手回复" : "mock answer"),
                     // Identical text from another person is still a new message.
                     (type, "m2", "sender", "mock answer")
                 ], to: dir.appendingPathComponent("echoes.ndjson"))

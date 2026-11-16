@@ -13,6 +13,7 @@ public struct AICardReference: Codable, Equatable {
 /// The host constructs every component and action. AI output may describe a
 /// bounded form, but cannot supply executable actions, recipients or A2UI.
 public struct AICardReply {
+    public static let summary = "DWS助手回复"
     public let surfaceID: String
     public let creationContent: String
     public let finishContent: String
@@ -158,7 +159,7 @@ public struct AICardReply {
     }
 
     private static var attribution: [String: Any] {
-        ["id": "ai-attribution", "component": "Text", "text": "【此消息由AI助手通过DWS自动回复】",
+        ["id": "ai-attribution", "component": "Text", "text": "「此消息由DWS助手通过DWS CLI自动回复」",
          "colorToken": "common_level2_base_color", "sizeToken": "common_footnote_text_style__font_size"]
     }
 

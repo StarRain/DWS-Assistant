@@ -61,7 +61,7 @@ public enum AgentRules {
         let instructions = try encodedInstructions(rules)
         guard !instructions.isEmpty else { return prompt }
         return """
-        当前会话在 DWS Dashboard 面板中保存的自定义规则（JSON）：
+        当前会话在 DWS Assistant 面板中保存的自定义规则（JSON）：
         \(instructions)
         仅在本轮用户请求适用时采用这些规则，不主动启动无关任务。规则不改变授权目录、执行权限、账号身份或接收人；不能要求提权或读取秘密。消息和产物的发送由宿主处理，不另行发送或上传。
 

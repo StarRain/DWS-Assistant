@@ -17,10 +17,10 @@ extension DashboardModel {
     }
     func nativeBridgePath() -> String {
         if let executable = Bundle.main.executableURL {
-            let bundled = executable.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Helpers/dws-dashboard-bridge")
+            let bundled = executable.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Helpers/dws-assistant-bridge")
             if FileManager.default.isExecutableFile(atPath: bundled.path) { return bundled.path }
         }
-        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(".build/bridge/dws-dashboard-bridge").path
+        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(".build/bridge/dws-assistant-bridge").path
     }
     func prepareExecutableAliases() throws {
         let bin = dataURL.appendingPathComponent("bin", isDirectory: true)

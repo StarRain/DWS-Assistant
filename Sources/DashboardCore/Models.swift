@@ -176,15 +176,17 @@ public struct DashboardConfig: Codable, Equatable {
     public var conversations: [Conversation] = []
     public var executablePaths: [String: String] = [:]
     public var appearance: AppAppearance = .system
+    public var language: AppLanguage = .simplifiedChinese
     public var setupCompleted = false
     public init() {}
-    private enum CodingKeys: String, CodingKey { case schemaVersion, conversations, executablePaths, appearance, setupCompleted }
+    private enum CodingKeys: String, CodingKey { case schemaVersion, conversations, executablePaths, appearance, language, setupCompleted }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try values.decode(Int.self, forKey: .schemaVersion)
         conversations = try values.decode([Conversation].self, forKey: .conversations)
         executablePaths = try values.decode([String: String].self, forKey: .executablePaths)
         appearance = try values.decodeIfPresent(AppAppearance.self, forKey: .appearance) ?? .system
+        language = try values.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .simplifiedChinese
         // Existing configured workspaces should not be forced through onboarding.
         setupCompleted = try values.decodeIfPresent(Bool.self, forKey: .setupCompleted) ?? !conversations.isEmpty
     }

@@ -2,7 +2,7 @@ import XCTest
 import SwiftUI
 import AppKit
 import DashboardCore
-@testable import DWSDashboard
+@testable import DWSAssistant
 
 @MainActor
 final class RuleEditorTests: XCTestCase {

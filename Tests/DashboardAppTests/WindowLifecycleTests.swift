@@ -1,6 +1,6 @@
 import AppKit
 import XCTest
-@testable import DWSDashboard
+@testable import DWSAssistant
 
 @MainActor
 final class WindowLifecycleTests: XCTestCase {

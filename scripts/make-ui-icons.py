@@ -36,4 +36,4 @@ for kind, name in icons.items():
                 lines.append('            '+s)
         else: raise ValueError(tag)
 lines += ['        }', '        let scale = min(rect.width, rect.height) / 24', '        return path.applying(CGAffineTransform(a: scale, b: 0, c: 0, d: scale,', '                                             tx: rect.midX - 12 * scale, ty: rect.midY - 12 * scale))', '    }', '}', '', 'struct DashboardGlyph: View {', '    let kind: DashboardIcon.Kind', '    var size: CGFloat = 22', '    var body: some View {', '        DashboardIcon(kind: kind)', '            .stroke(style: StrokeStyle(lineWidth: size * 1.65 / 24, lineCap: .round, lineJoin: .round))', '            .frame(width: size, height: size)', '            .accessibilityHidden(true)', '    }', '}', '']
-(root/'Sources/DWSDashboard/DashboardIcon.swift').write_text('\n'.join(lines))
+(root/'Sources/DWSAssistant/DashboardIcon.swift').write_text('\n'.join(lines))

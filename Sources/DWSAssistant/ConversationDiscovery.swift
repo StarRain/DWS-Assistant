@@ -1,7 +1,8 @@
 import SwiftUI
 import DashboardCore
 
-struct ConversationDiscovery: View {
+struct ConversationDiscovery: DashboardLocalizedView {
+    @Environment(\.locale) var locale
     @EnvironmentObject var model: DashboardModel
     @Environment(\.dismiss) private var dismiss
     let kind: ConversationKind
@@ -16,7 +17,7 @@ struct ConversationDiscovery: View {
     @State private var draft: Conversation?
     private var profile: String { model.accountOK ? model.profile?.id ?? "" : "" }
     private var keyword: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var noun: String { kind == .group ? "群聊" : "联系人" }
+    private var noun: String { kind == .group ? l("群聊") : l("联系人") }
 
     var body: some View {
         if let draft {
@@ -25,18 +26,18 @@ struct ConversationDiscovery: View {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     Image(systemName: "magnifyingglass").font(.system(size: 22)).foregroundStyle(.secondary)
-                    TextField(kind == .group ? "搜索群名称" : "搜索联系人姓名", text: $query)
+                    TextField(kind == .group ? l("搜索群名称") : l("搜索联系人姓名"), text: $query)
                         .font(.system(size: 20)).textFieldStyle(.plain)
                         .onSubmit { if let first = items.first, loadedQuery == keyword { configure(first) } }
                     if loading { ProgressView().controlSize(.small) }
                     Button { dismiss() } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
-                        .buttonStyle(.plain).keyboardShortcut(.cancelAction).help("关闭搜索")
+                        .buttonStyle(.plain).keyboardShortcut(.cancelAction).help(l("关闭搜索"))
                 }.padding(22)
                 DashboardDivider()
                 if keyword.isEmpty {
                     VStack(spacing: 12) {
                         DashboardGlyph(kind: kind == .group ? .groups : .contacts, size: 34).foregroundStyle(.secondary)
-                        Text("输入\(noun)名称，选择结果后配置并添加").foregroundStyle(.secondary)
+                        Text(l("输入\(noun)名称，选择结果后配置并添加")).foregroundStyle(.secondary)
                     }.frame(maxWidth: .infinity, minHeight: 180)
                 } else {
                     ScrollView {
@@ -53,18 +54,18 @@ struct ConversationDiscovery: View {
                                             Text(item.id).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
                                         }
                                         Spacer()
-                                        if added { Text("已添加").font(.caption).foregroundStyle(.secondary) }
+                                        if added { Text(l("已添加")).font(.caption).foregroundStyle(.secondary) }
                                         else { Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary) }
                                     }.padding(10).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                                 }.buttonStyle(.plain).disabled(added || loading || loadedQuery != keyword || loadedProfile != profile)
                             }
                             if cursor != nil {
-                                Button("加载更多") { Task { await search(more: true) } }.disabled(loading).padding(8)
+                                Button(l("加载更多")) { Task { await search(more: true) } }.disabled(loading).padding(8)
                             }
-                            if !loading && items.isEmpty { Text(detail.isEmpty ? "没有找到相关\(noun)" : detail).foregroundStyle(.secondary).padding(.vertical, 52) }
+                            if !loading && items.isEmpty { Text(detail.isEmpty ? l("没有找到相关\(noun)") : diagnostic(detail)).foregroundStyle(.secondary).padding(.vertical, 52) }
                         }.padding(10)
                     }.frame(height: 310)
-                    if !items.isEmpty && !detail.isEmpty { Text(detail).font(.caption).foregroundStyle(.secondary).padding(.bottom, 12) }
+                    if !items.isEmpty && !detail.isEmpty { Text(diagnostic(detail)).font(.caption).foregroundStyle(.secondary).padding(.bottom, 12) }
                 }
             }.frame(width: 620).background(DashboardTheme.card).foregroundStyle(DashboardTheme.text).tint(DashboardTheme.action)
                 .dashboardInputFocus()
@@ -87,7 +88,7 @@ struct ConversationDiscovery: View {
     }
     private func search(more: Bool) async {
         let p = profile, q = keyword
-        guard !p.isEmpty, !q.isEmpty else { loading = false; detail = "请先登录钉钉"; return }
+        guard !p.isEmpty, !q.isEmpty else { loading = false; detail = l("请先登录钉钉"); return }
         guard !more || (loadedProfile == p && loadedQuery == q) else { return }
         loading = true
         do {

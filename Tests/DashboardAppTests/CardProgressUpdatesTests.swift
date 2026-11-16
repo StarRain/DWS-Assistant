@@ -1,6 +1,6 @@
 import XCTest
 @testable import DashboardCore
-@testable import DWSDashboard
+@testable import DWSAssistant
 
 @MainActor
 final class CardProgressUpdatesTests: XCTestCase {
@@ -65,7 +65,7 @@ final class CardProgressUpdatesTests: XCTestCase {
         XCTAssertEqual(writes.split(separator: "\n").count, 1)
         XCTAssertEqual(finished.split(separator: "\n").count, 1)
         let body = try String(contentsOf: directory.appendingPathComponent("update-body"), encoding: .utf8)
-        XCTAssertTrue(body.contains("正在执行")); XCTAssertTrue(body.contains("【此消息由AI助手通过DWS自动回复】"))
+        XCTAssertTrue(body.contains("正在执行")); XCTAssertTrue(body.contains("「此消息由DWS助手通过DWS CLI自动回复」"))
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertEqual(try String(contentsOf: directory.appendingPathComponent("updates"), encoding: .utf8), writes)
     }

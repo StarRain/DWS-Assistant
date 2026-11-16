@@ -24,10 +24,10 @@ export GOCACHE="$root/.build/go-cache"
 export GOMODCACHE="$root/.build/go-mod"
 export GOPATH="$root/.build/go-path"
 export GOTOOLCHAIN=local
-go_bin="${DWS_DASHBOARD_GO:-$root/.build/toolchain/go/bin/go}"
+go_bin="${DWS_ASSISTANT_GO:-${DWS_DASHBOARD_GO:-$root/.build/toolchain/go/bin/go}}"
 if [[ ! -x "$go_bin" ]]; then go_bin="$(command -v go)"; fi
 cd .build/vendor/dws
-"$go_bin" build -trimpath -ldflags '-s -w' -o "$root/.build/bridge/dws-dashboard-bridge" ./cmd/dashboard-bridge
+"$go_bin" build -trimpath -ldflags '-s -w' -o "$root/.build/bridge/dws-assistant-bridge" ./cmd/dashboard-bridge
 "$go_bin" list -deps -json ./cmd/dashboard-bridge > "$root/.build/bridge/modules.json"
 python3 "$root/scripts/collect-licenses.py" "$root/.build/bridge/modules.json" "$root/.build/bridge/Licenses"
 if [[ "${1:-}" == "--test" ]]; then

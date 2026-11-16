@@ -1,6 +1,7 @@
 import SwiftUI
 
-struct AccountDetailsView: View {
+struct AccountDetailsView: DashboardLocalizedView {
+    @Environment(\.locale) var locale
     @EnvironmentObject var model: DashboardModel
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingLogout = false
@@ -8,12 +9,12 @@ struct AccountDetailsView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("账号详情").font(.title2.bold())
+                Text(l("账号详情")).font(.title2.bold())
                 Spacer()
                 Button { Task { await model.refreshAccounts() } } label: {
-                    Label("刷新", systemImage: "arrow.clockwise")
+                    Label(l("刷新"), systemImage: "arrow.clockwise")
                 }.disabled(model.refreshing || model.loggingOut || model.preview)
-                Button("关闭") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(l("关闭")) { dismiss() }.keyboardShortcut(.cancelAction)
             }.padding(24)
 
             ScrollView {
@@ -22,10 +23,10 @@ struct AccountDetailsView: View {
                         HStack(spacing: 8) {
                             Image(systemName: model.accountOK ? "checkmark.seal.fill" : "person.crop.circle.badge.questionmark")
                                 .foregroundStyle(model.accountOK ? Color.green : DashboardTheme.secondary)
-                            Text(model.accountTitle).font(.system(size: 13, weight: .semibold))
+                            Text(tr(model.accountTitle)).font(.system(size: 13, weight: .semibold))
                             Spacer()
                             if model.refreshing || model.loggingOut { ProgressView().controlSize(.small) }
-                            else if model.accountOK { Text("当前钉钉账号").font(.caption).foregroundStyle(.secondary) }
+                            else if model.accountOK { Text(l("当前钉钉账号")).font(.caption).foregroundStyle(.secondary) }
                         }
                         if let profile = model.profile {
                             DashboardDivider()
@@ -40,22 +41,22 @@ struct AccountDetailsView: View {
                                     }
                                     let ids = profile.id.split(separator: ":", maxSplits: 1).map(String.init)
                                     VStack(alignment: .leading, spacing: 6) {
-                                        identifier("组织 ID", value: ids.first ?? "")
-                                        identifier("用户 ID", value: ids.dropFirst().first ?? "")
+                                        identifier(l("组织 ID"), value: ids.first ?? "")
+                                        identifier(l("用户 ID"), value: ids.dropFirst().first ?? "")
                                     }
                                 }.frame(maxWidth: .infinity, alignment: .leading)
                             }
                         } else {
-                            Text(model.accountDetail).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                            Text(diagnostic(model.accountDetail)).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                         }
                     }.padding(20).frame(maxWidth: .infinity, alignment: .leading).card()
                     if let notice = model.notice {
-                        Text(notice).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                        Text(diagnostic(notice)).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
                     }
                     HStack(spacing: 12) {
-                        Text("退出时停止助手，保留会话配置。").font(.caption).foregroundStyle(.secondary)
+                        Text(l("退出时停止助手，保留会话配置。")).font(.caption).foregroundStyle(.secondary)
                         Spacer(minLength: 0)
-                        Button(model.loggingOut ? "正在退出…" : "退出登录", role: .destructive) { confirmingLogout = true }
+                        Button(model.loggingOut ? l("正在退出…") : l("退出登录"), role: .destructive) { confirmingLogout = true }
                             .disabled(model.loggingOut || model.refreshing || !model.accountOK || model.preview)
                     }
                 }.padding(.horizontal, 24).padding(.bottom, 24)
@@ -63,11 +64,11 @@ struct AccountDetailsView: View {
         }.frame(width: 600, height: 360)
             .foregroundStyle(DashboardTheme.text).tint(DashboardTheme.action)
             .background(DashboardTheme.background)
-            .confirmationDialog("退出当前钉钉账号？", isPresented: $confirmingLogout, titleVisibility: .visible) {
-                Button("退出登录", role: .destructive) { Task { await model.logout() } }
-                Button("取消", role: .cancel) {}
+            .confirmationDialog(l("退出当前钉钉账号？"), isPresented: $confirmingLogout, titleVisibility: .visible) {
+                Button(l("退出登录"), role: .destructive) { Task { await model.logout() } }
+                Button(l("取消"), role: .cancel) {}
             } message: {
-                Text("将停止 AI 助手服务并退出当前账号。群聊、私聊及其配置会保留，重新登录后可继续使用。")
+                Text(l("将停止 DWS助手服务并退出当前账号。群聊、私聊及其配置会保留，重新登录后可继续使用。"))
             }
     }
 

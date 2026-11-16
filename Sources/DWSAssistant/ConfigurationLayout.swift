@@ -53,7 +53,7 @@ struct ConfigurationToggle: View {
     init(_ title: String, isOn: Binding<Bool>) { self.title = title; _isOn = isOn }
     var body: some View {
         HStack {
-            Text(title)
+            TranslatedText(title)
             Spacer()
             Toggle(title, isOn: $isOn).labelsHidden().toggleStyle(.switch)
         }
@@ -68,7 +68,7 @@ struct ConfigurationSection<Content: View>: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.headline).padding(.horizontal, 10)
+            TranslatedText(title).font(.headline).padding(.horizontal, 10)
             ConfigurationGroup { content }
         }
     }

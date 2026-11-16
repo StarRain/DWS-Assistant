@@ -71,7 +71,7 @@ public enum Commands {
         if conversation.replyFormat == .aiCard {
             let card = try card ?? AICardReply(text: text, key: key, conversation: conversation, conversationID: conversation.kind == .group ? conversation.stableID : "")
             return try dws(["chat", "message", "send-a2ui-card", conversation.kind == .group ? "--conversation-id" : "--open-dingtalk-id", conversation.stableID,
-                            "--content", "-", "--summary", "AI 助手回复", "--profile", conversation.profile, "--format", "json", "--yes"],
+                            "--content", "-", "--summary", AICardReply.summary, "--profile", conversation.profile, "--format", "json", "--yes"],
                            config: config, stdin: card.creationContent, timeout: 90)
         }
         let markdown = conversation.replyFormat == .markdown

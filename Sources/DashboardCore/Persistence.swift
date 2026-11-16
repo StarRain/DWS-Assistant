@@ -158,7 +158,10 @@ public final class DeliveryLedger {
     }
     public func prepareReplyEcho(_ text: String, conversation: Conversation, key: String) throws {
         var texts = [text, AICardReply.textOnlyMarkdown(text)]
-        if conversation.replyFormat == .aiCard { texts.append("AI 助手回复") }
+        if conversation.replyFormat == .aiCard {
+            // Keep suppressing delayed echoes of cards sent before the rename.
+            texts += [AICardReply.summary, "AI 助手回复"]
+        }
         var next = records
         // A late echo of the processing card must remain suppressed after its
         // body has been replaced with the final answer.

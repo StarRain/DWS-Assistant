@@ -41,13 +41,14 @@ enum DashboardTheme {
     static let brandGradient = LinearGradient(colors: [violet, accent, cyan], startPoint: .leading, endPoint: .trailing)
 }
 
-struct AppearancePicker: View {
+struct AppearancePicker: DashboardLocalizedView {
+    @Environment(\.locale) var locale
     @EnvironmentObject var model: DashboardModel
     var body: some View {
         HStack(spacing: 3) {
             ForEach(AppAppearance.allCases) { appearance in
                 Button { model.setAppearance(appearance) } label: {
-                    Label(appearance.title, systemImage: appearance.symbol)
+                    Label(tr(appearance.title), systemImage: appearance.symbol)
                         .font(.system(size: 12, weight: model.config.appearance == appearance ? .semibold : .regular))
                         .padding(.horizontal, 13).frame(height: 34)
                         .contentShape(Rectangle())

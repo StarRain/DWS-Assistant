@@ -5,6 +5,7 @@ import SwiftUI
 /// Chinese phrases and script paths from moving to the next line as a block.
 struct RuleContentEditor: NSViewRepresentable {
     @Binding var text: String
+    @Environment(\.locale) private var locale
 
     func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
 
@@ -15,6 +16,7 @@ struct RuleContentEditor: NSViewRepresentable {
         scroll.autohidesScrollers = true
         scroll.borderType = .noBorder
         let editor = Self.makeTextView()
+        editor.setAccessibilityLabel(UILocalizer(locale: locale).label("规则内容"))
         editor.delegate = context.coordinator
         editor.string = text
         scroll.documentView = editor
@@ -24,6 +26,7 @@ struct RuleContentEditor: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.text = $text
         guard let editor = scroll.documentView as? NSTextView else { return }
+        editor.setAccessibilityLabel(UILocalizer(locale: locale).label("规则内容"))
         if editor.string != text, !editor.hasMarkedText() { editor.string = text }
     }
 

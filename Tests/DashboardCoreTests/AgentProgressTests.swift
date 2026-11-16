@@ -77,7 +77,7 @@ final class AgentProgressTests: XCTestCase {
             XCTAssertEqual((items.first { $0["id"] as? String == "root" }?["children"] as? [String])?.last, "ai-attribution")
             let footer = items.filter { $0["id"] as? String == "ai-attribution" }
             XCTAssertEqual(footer.count, 1)
-            XCTAssertEqual(footer.first?["text"] as? String, "【此消息由AI助手通过DWS自动回复】")
+            XCTAssertEqual(footer.first?["text"] as? String, "「此消息由DWS助手通过DWS CLI自动回复」")
         }
         let failure = try AICardReply.statusContent(reference, status: "失败", progress: buffer.snapshot)
         XCTAssertTrue(failure.contains("已停止")); XCTAssertFalse(failure.contains("shimmer")); XCTAssertFalse(failure.contains("Check_L_outlined"))

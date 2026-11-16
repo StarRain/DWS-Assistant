@@ -2,17 +2,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "DWSDashboard",
+    name: "DWSAssistant",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "DashboardCore", targets: ["DashboardCore"]),
-        .executable(name: "DWSDashboard", targets: ["DWSDashboard"])
+        .executable(name: "DWSAssistant", targets: ["DWSAssistant"])
     ],
     targets: [
         .target(name: "DashboardCore"),
-        .executableTarget(name: "DWSDashboard", dependencies: ["DashboardCore"]),
+        .executableTarget(name: "DWSAssistant", dependencies: ["DashboardCore"], resources: [.process("Resources")]),
         .testTarget(name: "DashboardCoreTests", dependencies: ["DashboardCore"]),
-        .testTarget(name: "DashboardAppTests", dependencies: ["DWSDashboard", "DashboardCore"])
+        .testTarget(name: "DashboardAppTests", dependencies: ["DWSAssistant", "DashboardCore"])
     ],
     swiftLanguageModes: [.v5]
 )

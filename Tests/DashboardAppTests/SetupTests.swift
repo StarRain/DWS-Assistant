@@ -1,6 +1,6 @@
 import XCTest
 import DashboardCore
-@testable import DWSDashboard
+@testable import DWSAssistant
 
 @MainActor
 final class SetupTests: XCTestCase {

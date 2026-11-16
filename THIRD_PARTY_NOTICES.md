@@ -1,6 +1,6 @@
 # Third-party notices
 
-DWS Dashboard includes an independently built wrapper around **DingTalk Workspace CLI v1.0.66**, Copyright 2026 Alibaba Group, licensed under the Apache License, Version 2.0.
+DWS Assistant includes an independently built wrapper around **DingTalk Workspace CLI v1.0.66**, Copyright 2026 Alibaba Group, licensed under the Apache License, Version 2.0.
 
 Pinned source: https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/tree/f215043e676d6889e1ddce3464828d8b1ec40c31
 
@@ -21,9 +21,9 @@ The five original SVG references supplied for this project are preserved in
 `Assets/Icons` and generated SwiftUI vector paths; no PNG icon assets are used.
 The original download did not include author or license metadata.
 
-The Apache-2.0 license for DWS Dashboard does not grant additional rights to
+The Apache-2.0 license for DWS Assistant does not grant additional rights to
 this third-party artwork, including the original references, their adapted
 SVGs, and the corresponding generated paths in
-`Sources/DWSDashboard/DashboardIcon.swift`. Their original author and license
+`Sources/DWSAssistant/DashboardIcon.swift`. Their original author and license
 remain unverified; those rights must be established separately before reuse
 or redistribution of the artwork.

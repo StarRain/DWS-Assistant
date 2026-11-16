@@ -2,21 +2,22 @@ import SwiftUI
 import AppKit
 import DashboardCore
 
-struct QuickPanelView: View {
+struct QuickPanelView: DashboardLocalizedView {
+    @Environment(\.locale) var locale
     let prepareToOpenMainWindow: () -> Void
     @EnvironmentObject private var model: DashboardModel
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
 
     private var enabledCount: Int { model.conversations.filter(\.listen).count }
-    private var serviceStatus: String { model.stopping ? "关闭中" : model.personalRunning ? "已开启" : "未开启" }
+    private var serviceStatus: String { model.stopping ? l("关闭中") : model.personalRunning ? l("已开启") : l("未开启") }
     private var serviceDetail: String {
-        if model.stopping { return "正在停止监听和回复…" }
-        if model.personalRunning { return "\(model.listeningCount) / \(enabledCount) 个会话正在监听" }
-        if model.needsSetup { return "请先在主面板完成安装与登录" }
-        if !model.accountOK { return "请先在主面板登录钉钉" }
-        if enabledCount == 0 { return "添加会话并开启监听后，即可使用" }
-        return "开启后监听已配置的 \(enabledCount) 个会话"
+        if model.stopping { return l("正在停止监听和回复…") }
+        if model.personalRunning { return l("\(model.listeningCount) / \(enabledCount) 个会话正在监听") }
+        if model.needsSetup { return l("请先在主面板完成安装与登录") }
+        if !model.accountOK { return l("请先在主面板登录钉钉") }
+        if enabledCount == 0 { return l("添加会话并开启监听后，即可使用") }
+        return l("开启后监听已配置的 \(enabledCount) 个会话")
     }
 
     var body: some View {
@@ -25,8 +26,8 @@ struct QuickPanelView: View {
                 Image(nsImage: DashboardBrand.appIcon).resizable().frame(width: 34, height: 34)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("DWS Dashboard").font(.system(size: 14, weight: .semibold))
-                    Text(model.accountOK ? model.profile?.name ?? "已登录" : "尚未登录")
+                    Text(l("DWS助手")).font(.system(size: 14, weight: .semibold))
+                    Text(model.accountOK ? model.profile?.name ?? l("已登录") : l("尚未登录"))
                         .font(.system(size: 11)).foregroundStyle(DashboardTheme.secondary).lineLimit(1)
                 }
                 Spacer()
@@ -35,9 +36,9 @@ struct QuickPanelView: View {
 
             VStack(alignment: .leading, spacing: 13) {
                 HStack {
-                    Text("AI 助手服务 · \(serviceStatus)").font(.system(size: 12, weight: .medium))
+                    Text(l("DWS助手服务 · \(serviceStatus)")).font(.system(size: 12, weight: .medium))
                     Spacer(minLength: 8)
-                    Toggle("AI 助手服务", isOn: Binding(get: { model.personalRunning }, set: {
+                    Toggle(l("DWS助手服务"), isOn: Binding(get: { model.personalRunning }, set: {
                         if $0 { model.startPersonal() } else { model.stopPersonal() }
                     }))
                     .labelsHidden().toggleStyle(.switch).controlSize(.small)
@@ -49,21 +50,21 @@ struct QuickPanelView: View {
                 }
                 DashboardDivider()
                 HStack(spacing: 0) {
-                    statistic("监听中", value: model.listeningCount)
-                    statistic("处理中", value: model.replyStates.count)
-                    statistic("本次已回复", value: model.deliveredCount)
+                    statistic(l("监听中"), value: model.listeningCount)
+                    statistic(l("处理中"), value: model.replyStates.count)
+                    statistic(l("本次已回复"), value: model.deliveredCount)
                 }
             }.padding(14).card()
 
             HStack(spacing: 10) {
-                conversationShortcut("群聊", page: "groups", kind: .group, icon: .groups)
-                conversationShortcut("私聊", page: "contacts", kind: .contact, icon: .contacts)
+                conversationShortcut(l("群聊"), page: "groups", kind: .group, icon: .groups)
+                conversationShortcut(l("私聊"), page: "contacts", kind: .contact, icon: .contacts)
             }
 
             Button { showPage("activity") } label: {
                 VStack(alignment: .leading, spacing: 9) {
                     HStack {
-                        Text("最近动态").font(.system(size: 11, weight: .medium))
+                        Text(l("最近动态")).font(.system(size: 11, weight: .medium))
                         Spacer()
                         if let activity = model.activities.first {
                             Text(activity.date, format: .dateTime.hour().minute()).font(.system(size: 10)).monospacedDigit()
@@ -71,12 +72,12 @@ struct QuickPanelView: View {
                         Image(systemName: "chevron.right").font(.system(size: 9))
                     }.foregroundStyle(DashboardTheme.secondary)
                     if let failure = model.storageFailure ?? model.notice {
-                        Text(failure).font(.system(size: 11)).foregroundStyle(.red).lineLimit(2)
+                        Text(diagnostic(failure)).font(.system(size: 11)).foregroundStyle(.red).lineLimit(2)
                     } else if let activity = model.activities.first {
-                        Text(activity.message).font(.system(size: 11))
+                        Text(diagnostic(activity.message)).font(.system(size: 11))
                             .foregroundStyle(activity.level == "错误" ? Color.red : DashboardTheme.text).lineLimit(2)
                     } else {
-                        Text("暂无动态，开启助手后可在这里查看状态。")
+                        Text(l("暂无动态，开启助手后可在这里查看状态。"))
                             .font(.system(size: 11)).foregroundStyle(DashboardTheme.secondary)
                     }
                 }.frame(maxWidth: .infinity, minHeight: 48, alignment: .topLeading)
@@ -84,15 +85,15 @@ struct QuickPanelView: View {
             }.buttonStyle(.plain)
 
             HStack(spacing: 8) {
-                shortcut("概览", page: "overview", icon: .overview)
-                shortcut("日志", page: "activity", icon: .activity)
-                shortcut("设置", page: "settings", icon: .settings)
+                shortcut(l("概览"), page: "overview", icon: .overview)
+                shortcut(l("日志"), page: "activity", icon: .activity)
+                shortcut(l("设置"), page: "settings", icon: .settings)
             }
             HStack {
-                Button("打开主面板") { showPage("overview") }
+                Button(l("打开主面板")) { showPage("overview") }
                     .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(DashboardTheme.accent)
                 Spacer()
-                Button("关闭助手并退出") { NSApp.terminate(nil) }
+                Button(l("关闭助手并退出")) { NSApp.terminate(nil) }
                     .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(DashboardTheme.secondary)
             }.padding(.top, 2)
         }
@@ -142,11 +143,12 @@ struct QuickPanelView: View {
     }
 }
 
-struct QuickPanelCommand: View {
+struct QuickPanelCommand: DashboardLocalizedView {
+    @Environment(\.locale) var locale
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Button("快捷面板") {
+        Button(l("快捷面板")) {
             openWindow(id: "quick-panel")
             NSApp.activate(ignoringOtherApps: true)
         }.keyboardShortcut("d", modifiers: [.command, .shift])

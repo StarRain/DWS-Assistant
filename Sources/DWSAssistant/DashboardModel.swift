@@ -329,6 +329,13 @@ final class DashboardModel: ObservableObject {
 
     func applyAppearance() { NSApp.appearance = config.appearance.nativeAppearance }
 
+    func setLanguage(_ language: AppLanguage) {
+        do {
+            if preview { config.language = language }
+            else { var next = config; next.language = language; try persist(next) }
+        } catch { report(error) }
+    }
+
     func setAppearance(_ appearance: AppAppearance) {
         do {
             if preview { config.appearance = appearance }
@@ -370,7 +377,7 @@ final class DashboardModel: ObservableObject {
             }
             try await synchronizeMentions()
         }
-        log("已更新「\(conversation.title)」：监听\(conversation.listen ? "开启" : "关闭")\(personalRunning ? "，已应用" : "，开启 AI 助手后生效")")
+        log("已更新「\(conversation.title)」：监听\(conversation.listen ? "开启" : "关闭")\(personalRunning ? "，已应用" : "，开启 DWS助手后生效")")
     }
 
     func removeConversation(_ conversation: Conversation) async throws {
@@ -445,7 +452,7 @@ final class DashboardModel: ObservableObject {
         stopPersonal(); cancelLogin()
         for _ in 0..<150 where stopping || loggingIn || loggingOut { try? await Task.sleep(for: .milliseconds(100)) }
         let complete = !stopping && !loggingIn && !loggingOut
-        if complete { log("AI 助手已关闭") }
+        if complete { log("DWS助手已关闭") }
         else { notice = "停止尚未全部确认，请稍后再检查。" }
         return complete
     }
@@ -484,7 +491,7 @@ final class DashboardModel: ObservableObject {
                     self.report(error)
                 }
             }
-            log("AI 助手启动中：正在核验当前账号消息身份")
+            log("DWS助手启动中：正在核验当前账号消息身份")
         } catch { report(error) }
     }
 
@@ -966,15 +973,16 @@ final class DashboardModel: ObservableObject {
         do {
             if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             loginAtStartup = SMAppService.mainApp.status == .enabled
-            if enabled && !loginAtStartup { notice = "请在系统设置 → 通用 → 登录项中允许 DWS Dashboard" }
+            if enabled && !loginAtStartup { notice = "请在系统设置 → 通用 → 登录项中允许 DWS Assistant" }
         } catch { report(error) }
     }
 
     private func loadPreview() {
-        profile = ProfileSummary(id: "preview-corp:preview-user", name: "预览账号", organization: "示例工作空间")
+        let labels = UILocalizer(locale: config.language.locale)
+        profile = ProfileSummary(id: "preview-corp:preview-user", name: labels.label("预览账号"), organization: labels.label("示例工作空间"))
         accountTitle = "界面预览"; accountDetail = "隔离的模拟数据 · 不会访问钉钉或启动 AI"; accountOK = false
         for (name, kind) in [("产品与研发", ConversationKind.group), ("项目日常", .group), ("协作联系人", .contact)] {
-            var c = Conversation(); c.name = name; c.kind = kind; c.stableID = "preview-" + c.id.uuidString; c.profile = profile!.id
+            var c = Conversation(); c.name = labels.label(name); c.kind = kind; c.stableID = "preview-" + c.id.uuidString; c.profile = profile!.id
             config.conversations.append(c)
         }
         activities = [Activity(level: "信息", message: "界面预览已加载，全部监听和发送保持关闭"), Activity(level: "信息", message: "本地工作区已就绪")]
