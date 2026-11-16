@@ -83,7 +83,12 @@ public enum Commands {
     public static func updateCard(_ reference: AICardReference, content: String, processing: Bool = false, config: DashboardConfig) throws -> CommandSpec {
         try Validation.profile(reference.profile)
         try Validation.stableID(reference.bizID, name: "AI 卡片 ID")
-        return try dws(["chat", "message", "update-a2ui-card", "--biz-id", reference.bizID, "--content", "-", "--flow-status", processing ? "INPUTTING" : "FINISH", "--profile", reference.profile, "--format", "json", "--yes"], config: config, stdin: content, timeout: 45)
+        // Forms are published with FINISH before accepting user input. Their
+        // callbacks may update the same card, but must not reopen that stream
+        // with INPUTTING. Processing text/animation and tool progress live in
+        // the components and do not require the transport to become streaming.
+        let flowStatus = processing && reference.interaction == nil ? "INPUTTING" : "FINISH"
+        return try dws(["chat", "message", "update-a2ui-card", "--biz-id", reference.bizID, "--content", "-", "--flow-status", flowStatus, "--profile", reference.profile, "--format", "json", "--yes"], config: config, stdin: content, timeout: 45)
     }
     public static func geminiCLI(_ settings: AgentSettings, prompt: String, config: DashboardConfig, fallbackDirectory: URL = DashboardPaths.dataDirectory.appendingPathComponent("agent-workspace"), images: [String] = []) throws -> CommandSpec {
         try Validation.agent(settings)

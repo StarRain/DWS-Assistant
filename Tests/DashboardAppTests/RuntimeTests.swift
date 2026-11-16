@@ -56,12 +56,24 @@ final class RuntimeTests: XCTestCase {
         elif [[ "$2" == "message" && "$3" == "send-a2ui-card" ]]; then
           /bin/cat > "$base/card-create-body"
           echo create >> "$base/card-creates"
+          /bin/rm -f "$base/card-stream-finished"
           echo '{"success":true,"result":{"bizId":"mock-card"}}'
         elif [[ "$2" == "message" && "$3" == "update-a2ui-card" ]]; then
           /bin/cat > "$base/card-update-body"
           echo update >> "$base/card-updates"
+          arguments=("$@")
+          flow=""
+          for ((i=0; i<${#arguments[@]}-1; i++)); do
+            [[ "${arguments[i]}" == "--flow-status" ]] && flow="${arguments[i+1]}"
+          done
+          printf '%s\n' "$flow" >> "$base/card-flow-statuses"
+          if [[ -f "$base/enforce-finished-stream" && -f "$base/card-stream-finished" && "$flow" != "FINISH" ]]; then
+            echo '{"error":{"message":"a2ui dws card update failed","server_error_code":"500136"}}'
+            exit 1
+          fi
           [[ -f "$base/card-update-failure" ]] && exit 1
-          echo '{"success":true,"result":{"bizId":"mock-card","flowStatus":"FINISH"}}'
+          [[ "$flow" == "FINISH" ]] && /usr/bin/touch "$base/card-stream-finished"
+          printf '{"success":true,"result":{"bizId":"mock-card","flowStatus":"%s"}}\n' "$flow"
         elif [[ "$2" == "+messages-send" ]]; then
           /bin/cat > "$base/sent-body"
           echo sent >> "$base/sends"
@@ -180,6 +192,7 @@ final class RuntimeTests: XCTestCase {
 
     func testFollowupExecutionProgressUpdatesOriginalCard() async throws {
         let (model, dir) = try interactiveFixture(), card = try await startedCard(model)
+        try Data().write(to: dir.appendingPathComponent("enforce-finished-stream"))
         try addExecutionProgress(to: dir)
         try JSONSerialization.data(withJSONObject: ["response": "构建已完成"]).write(to: dir.appendingPathComponent("ai-output.json"))
         try submitCard(card, to: dir)
@@ -191,6 +204,23 @@ final class RuntimeTests: XCTestCase {
         let final = try String(contentsOf: dir.appendingPathComponent("card-update-body"), encoding: .utf8)
         XCTAssertTrue(final.contains("已运行 1 条命令")); XCTAssertTrue(final.contains("构建已完成"))
         XCTAssertFalse(final.contains("shimmer")); XCTAssertFalse(final.contains("Countdown"))
+    }
+
+    func testInteractiveSubmitDoesNotReopenFinishedTransportStream() async throws {
+        let (model, dir) = try interactiveFixture(), card = try await startedCard(model)
+        try Data().write(to: dir.appendingPathComponent("enforce-finished-stream"))
+        try JSONSerialization.data(withJSONObject: ["response": "确认后的任务已完成"]).write(to: dir.appendingPathComponent("ai-output.json"))
+        try submitCard(card, to: dir)
+        for _ in 0..<150 where model.recentDeliveries.filter({ $0.state == .accepted }).count < 2 { try await Task.sleep(for: .milliseconds(20)) }
+        _ = await model.stopAll()
+        XCTAssertEqual(model.recentDeliveries.filter { $0.state == .accepted }.count, 2, model.activities.map(\.message).joined(separator: "\n"))
+        XCTAssertEqual(count("generations", in: dir), 2)
+        XCTAssertEqual(count("card-creates", in: dir), 1)
+        let flows = try String(contentsOf: dir.appendingPathComponent("card-flow-statuses"), encoding: .utf8).split(separator: "\n").map(String.init)
+        XCTAssertEqual(flows, ["FINISH", "FINISH", "FINISH"])
+        let update = try String(contentsOf: dir.appendingPathComponent("card-update-body"), encoding: .utf8)
+        XCTAssertTrue(update.contains("确认后的任务已完成"))
+        XCTAssertFalse(update.contains("createSurface"))
     }
 
     func testInteractiveSubmitContinuesOnceAndUpdatesOriginalCard() async throws {
@@ -321,6 +351,7 @@ final class RuntimeTests: XCTestCase {
 
     func testInteractiveFollowupFormUsesFreshNonceOnSameCard() async throws {
         let (model, dir) = try interactiveFixture(), original = try await startedCard(model)
+        try Data().write(to: dir.appendingPathComponent("enforce-finished-stream"))
         // Return the same form from the stub for a second round of clarification.
         try submitCard(original, to: dir)
         for _ in 0..<150 where model.recentDeliveries.filter({ $0.state == .accepted }).count < 2 { try await Task.sleep(for: .milliseconds(20)) }
@@ -786,10 +817,7 @@ final class RuntimeTests: XCTestCase {
 
     func testAICardUpdateFailureKeepsReferenceWithoutFallbackOrRetry() async throws {
         let (model, dir) = try fixture(slowAI: false, format: .aiCard)
-        let dws = dir.appendingPathComponent("dws")
-        var script = try String(contentsOf: dws, encoding: .utf8)
-        script = script.replacingOccurrences(of: "echo '{\"success\":true,\"result\":{\"bizId\":\"mock-card\",\"flowStatus\":\"FINISH\"}}'", with: "exit 1")
-        try script.write(to: dws, atomically: false, encoding: .utf8)
+        try Data().write(to: dir.appendingPathComponent("card-update-failure"))
         model.startPersonal()
         for _ in 0..<100 where !model.recentDeliveries.contains(where: { $0.state == .unknown }) { try await Task.sleep(for: .milliseconds(20)) }
         _ = await model.stopAll()

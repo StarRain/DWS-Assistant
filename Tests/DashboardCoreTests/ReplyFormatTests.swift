@@ -89,6 +89,30 @@ final class ReplyFormatTests: XCTestCase {
         XCTAssertEqual(finish.stdin, card.finishContent)
     }
 
+    func testInitialProgressStreamsButInteractiveFollowupsKeepTransportFinished() throws {
+        var config = DashboardConfig(); config.executablePaths["dws"] = "/bin/echo"
+        let c = conversation()
+        let initial = try AICardReply(text: "思考中…", key: "progress", processing: true)
+        let initialReference = try initial.reference(from: receipt(#"{"success":true,"result":{"bizId":"server-biz"}}"#), conversation: c)
+        XCTAssertTrue(try Commands.updateCard(initialReference, content: initial.replacementContent, processing: true, config: config).arguments.contains("INPUTTING"))
+
+        let form = try AICardReply(text: #"{"kind":"dws_interaction","text":"请选择后继续","questions":[]}"#, key: "form", conversation: c, surfaceID: initial.surfaceID)
+        let formReference = form.replacing(initialReference, conversation: c)
+        // Persisted forms from earlier versions also have this information.
+        let restored = try JSONDecoder().decode(AICardReference.self, from: JSONEncoder().encode(formReference))
+        for reference in [formReference, restored] {
+            for content in [try AICardReply.statusContent(reference, status: "处理中，请稍候…"),
+                            try AICardReply.progressContent(reference, progress: .init())] {
+                let update = try Commands.updateCard(reference, content: content, processing: true, config: config)
+                XCTAssertTrue(update.arguments.contains("FINISH"))
+                XCTAssertFalse(update.arguments.contains("INPUTTING"))
+                XCTAssertTrue(update.arguments.contains(initialReference.bizID))
+                XCTAssertTrue(update.arguments.contains(c.profile))
+                XCTAssertEqual(update.stdin, content)
+            }
+        }
+    }
+
     func testLateProcessingCardEchoStaysSuppressedAfterFinalUpdateAndRestart() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("card-echo-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }
