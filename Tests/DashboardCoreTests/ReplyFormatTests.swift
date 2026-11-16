@@ -48,8 +48,11 @@ final class ReplyFormatTests: XCTestCase {
         XCTAssertEqual(initial.count, 3); XCTAssertEqual(finish.count, 1)
         XCTAssertEqual((initial[0]["createSurface"] as? [String: Any])?["surfaceId"] as? String, card.surfaceID)
         let components = (initial[2]["updateComponents"] as? [String: Any])?["components"] as! [[String: Any]]
-        XCTAssertEqual(components.count, 2); XCTAssertEqual(components[1]["content"] as? String, answer)
-        XCTAssertNil(components[1]["action"]); XCTAssertNil(finish[0]["createSurface"])
+        let answerComponent = try XCTUnwrap(components.first { $0["id"] as? String == "answer" })
+        XCTAssertEqual(answerComponent["content"] as? String, answer)
+        XCTAssertTrue(components.allSatisfy { $0["action"] == nil })
+        XCTAssertEqual(components.filter { $0["id"] as? String == "ai-attribution" }.count, 1)
+        XCTAssertNil(finish[0]["createSurface"])
         let delta = finish[0]["updateDataModel"] as! [String: Any]
         XCTAssertEqual(delta["surfaceId"] as? String, card.surfaceID); XCTAssertEqual(delta["path"] as? String, "/status")
         XCTAssertEqual(try AICardReply(text: answer, key: "key").surfaceID, card.surfaceID)
