@@ -260,6 +260,8 @@ done
         if call.Method == "thread/start" || call.Method == "thread/resume" {
             policy, _ := call.Params["developerInstructions"].(string)
             if strings.Contains(policy, "仅当用户消息明确附带了本地附件路径时") || !strings.Contains(policy, "先实际查看和检索") { t.Fatalf("wrong project policy: %s", policy) }
+            if strings.Contains(policy, "直接调用原脚本") || strings.Contains(policy, "优先读取 --help") { t.Fatal("host prescribed a task-specific execution workflow") }
+            if strings.Contains(policy, "不要调用钉钉、邮件等工具另外发消息、上传产物") || strings.Contains(policy, "宿主发送约束") { t.Fatal("legacy blanket script restrictions still active") }
             sandbox := "read-only"
             if threadCalls < 2 {
                 if !strings.Contains(policy, string(roots)) || !strings.Contains(policy, "当前为受限执行") { t.Fatal("authorized roots or read-only permission missing") }
@@ -276,7 +278,8 @@ done
             contexts, _ := call.Params["additionalContext"].(map[string]any)
             policy, _ := contexts["dws.digital_employee_policy"].(map[string]any)
             value, _ := policy["value"].(string)
-            if policy["kind"] != "application" || !strings.Contains(value, "DWS Dashboard") { t.Fatal("resumed turn did not receive the project policy") }
+            if policy["kind"] != "application" || !strings.Contains(value, "DWS助手") { t.Fatal("resumed turn did not receive the project policy") }
+            if strings.Contains(value, "直接调用原脚本") || strings.Contains(value, "不要调用钉钉、邮件等工具另外发消息、上传产物") { t.Fatal("resumed turn retained task-specific workflow restrictions") }
             if (turnCalls < 2) != strings.Contains(value, customRules) { t.Fatal("resumed turn received incorrect rules") }
             turnCalls++
         }

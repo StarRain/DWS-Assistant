@@ -104,6 +104,37 @@ final class AgentRulesTests: XCTestCase {
         XCTAssertNil(try payload(settings, directory: directory)["custom_rules"])
     }
 
+    func testTaskRequestsReachEveryEngineWithoutExtraWorkflowRestrictions() throws {
+        let directory = try workspace()
+        let event = try IMEvent(line: #"{"content":"按规则运行打包脚本","message_id":"script-request"}"#)
+        let prompt = EventRouting.prompt(event: event, context: [], format: .aiCard)
+        let oldRestrictions = ["不另行发送或上传", "不调用钉钉、邮件等工具另外发送或上传", "不要调用钉钉、邮件等工具另外发消息、上传产物"]
+        for permission in ExecutionPermission.allCases {
+            for engine in Engine.allCases {
+                var settings = AgentSettings(); settings.engine = engine; settings.permission = permission
+                settings.authorizedDirectories = [directory.path]
+                settings.rules = [AgentRule(name: "打包", content: "调用 scripts/publish.sh，提供帮助中的打包、上传、通知选项。")]
+                var config = DashboardConfig(); config.executablePaths["gemini"] = "/bin/echo"
+                let command = try Commands.officialAgent(settings, prompt: prompt, route: "script-test", bridgePath: "/bin/echo", stateDirectory: directory.path, config: config)
+                let input = try XCTUnwrap(command.stdin)
+                let text: String
+                if engine == .gemini {
+                    text = input
+                    XCTAssertTrue(command.arguments.contains(permission == .full ? "yolo" : "plan"))
+                } else {
+                    let request = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(input.utf8)) as? [String: Any])
+                    text = try XCTUnwrap(request["text"] as? String)
+                    XCTAssertEqual(request["full_permission"] as? Bool, permission == .full)
+                    XCTAssertEqual(request["authorized_directories"] as? [String], [directory.path])
+                }
+                XCTAssertTrue(text.contains("按规则运行打包脚本"), "Task request lost for \(engine)")
+                XCTAssertFalse(text.contains("直接调用原脚本"), "The host must not prescribe a task-specific workflow")
+                XCTAssertTrue(oldRestrictions.allSatisfy { !text.contains($0) }, "Conflicting script restriction for \(engine)")
+                XCTAssertFalse(command.arguments.contains { $0.contains("publish.sh") }, "Rules stay in the engine prompt, not host shell arguments")
+            }
+        }
+    }
+
     func testBlankOversizedAndDuplicateRulesAreRejectedWithoutTruncation() throws {
         XCTAssertNoThrow(try AgentRules.validate([]))
         for rule in [AgentRule(), AgentRule(name: "有效名称", content: "  \n"),

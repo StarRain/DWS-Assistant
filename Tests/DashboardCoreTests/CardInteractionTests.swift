@@ -154,6 +154,34 @@ final class CardInteractionTests: XCTestCase {
         }
     }
 
+    func testScriptUploadAndNotificationChoicesReachTheConfirmedTaskUnchanged() throws {
+        var c = conversation(); c.agent.permission = .full
+        let options = [
+            ["id": "debug_upload", "label": "Debug → 上传到蒲公英"],
+            ["id": "debug_notify", "label": "Debug → 上传到蒲公英 → 钉钉通知"],
+            ["id": "release", "label": "Release（含调试工具）→ 仅构建 APK"],
+            ["id": "release_upload", "label": "Release（含调试工具）→ 上传到蒲公英"],
+            ["id": "release_notify", "label": "Release（含调试工具）→ 上传到蒲公英 → 钉钉通知"]
+        ]
+        let definition: [String: Any] = ["kind": "dws_interaction", "text": "请选择 scripts/publish.sh 的快捷流程。",
+            "questions": [["id": "q1", "label": "打包方式", "type": "single", "options": options]]]
+        let text = String(decoding: try JSONSerialization.data(withJSONObject: definition), as: UTF8.self)
+        let card = try AICardReply(text: text, key: "script-menu", conversation: c, conversationID: c.stableID)
+        let components = (try messages(card.creationContent)[2]["updateComponents"] as! [String: Any])["components"] as! [[String: Any]]
+        let picker = try XCTUnwrap(components.first { $0["component"] as? String == "ChoicePicker" })
+        let rendered = try XCTUnwrap(picker["options"] as? [[String: String]])
+        XCTAssertEqual(rendered.map { $0["label"] }, options.map { $0["label"] })
+        let ref = try card.reference(from: CommandResult(status: 0, stdout: #"{"success":true,"result":{"bizId":"script-card"}}"#, stderr: ""), conversation: c)
+        for option in options {
+            let submission = try event(ref, answers: ["q1": ["selected": [option["id"]!]]]).validate(reference: ref, conversation: c)
+            let prompt = try CardActionJob(key: "script-choice", reference: ref, action: "submit", submission: submission).prompt()
+            XCTAssertTrue(prompt.contains(option["label"]!))
+            XCTAssertFalse(prompt.contains("直接调用原脚本"), "Confirmed tasks must not gain a host-specific execution workflow")
+            XCTAssertFalse(prompt.contains("不调用钉钉、邮件等工具另外发送或上传"))
+        }
+        XCTAssertThrowsError(try event(ref, answers: ["q1": ["selected": ["unknown"]]]).validate(reference: ref, conversation: c))
+    }
+
     func testWrongCardScopeConfigurationAndExpiredFormsAreRejected() throws {
         let c = conversation()
         let ref = try reference(c), callback = try event(reference(c))

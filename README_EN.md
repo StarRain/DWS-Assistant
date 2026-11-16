@@ -162,6 +162,8 @@ For example, if the dashboard is set to **When anyone mentions you**, a rule say
 
 Likewise, a rule saying “run the build script” does not grant write access. Configure the necessary directories and execution permissions in the dashboard, and avoid contradictory rules.
 
+The selected AI engine handles tasks using the current request and enabled rules. The dashboard does not prescribe build or script workflows, or add content-based script reviews or blocks. The host delivers the automatic reply; that does not prohibit uploads, publishing or notifications explicitly required by the task itself. Directory authorization, actual engine permissions and timeouts still apply.
+
 ## Data and permissions
 
 - The app is named DWS Assistant, with Bundle ID `com.starrain.dwsassistant`. The rename keeps the existing data directory.
