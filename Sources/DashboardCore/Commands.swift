@@ -5,8 +5,8 @@ public enum ReplyReaction: String {
 }
 
 public enum Commands {
-    public static func reaction(_ reaction: ReplyReaction, remove: Bool = false, event: IMEvent, conversation: Conversation, config: DashboardConfig) throws -> CommandSpec {
-        guard EventRouting.shouldReply(event, profile: conversation.profile, conversation: conversation) else { throw DashboardError.invalid("状态表情不属于已授权的自动回复") }
+    public static func reaction(_ reaction: ReplyReaction, remove: Bool = false, event: IMEvent, conversation: Conversation, currentSenderID: String, config: DashboardConfig) throws -> CommandSpec {
+        guard EventRouting.shouldReply(event, profile: conversation.profile, conversation: conversation, currentSenderID: currentSenderID) else { throw DashboardError.invalid("状态表情不属于已授权的自动回复") }
         try Validation.profile(conversation.profile)
         try Validation.stableID(event.conversationID, name: "原消息会话 ID")
         try Validation.stableID(event.messageID, name: "原消息 ID")

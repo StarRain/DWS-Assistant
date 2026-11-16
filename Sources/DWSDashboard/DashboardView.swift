@@ -164,7 +164,7 @@ struct DashboardView: View {
                         Spacer()
                         statusPill(model.personalRunning ? "助手已开启" : "助手未开启", color: model.personalRunning ? .green : .gray)
                     }.frame(height: 40, alignment: .topLeading)
-                    identityCard(title: "群聊", subtitle: "支持仅 @我 回复，或收到消息自动回复", icon: .groups, status: "\(model.conversations.filter { $0.kind == .group && $0.listen }.count) 个已开启", color: accent)
+                    identityCard(title: "群聊", subtitle: "默认仅自己 @自己 回复，可按群调整触发方式", icon: .groups, status: "\(model.conversations.filter { $0.kind == .group && $0.listen }.count) 个已开启", color: accent)
                     DashboardDivider()
                     identityCard(title: "私聊", subtitle: "按联系人开启监听，可设置为仅接收消息", icon: .contacts, status: "\(model.conversations.filter { $0.kind == .contact && $0.listen }.count) 个已开启", color: accent)
                     Text("左下角控制 AI 助手；会话开关仅影响对应的群聊或私聊。")

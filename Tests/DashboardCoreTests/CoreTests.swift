@@ -12,7 +12,7 @@ final class CoreTests: XCTestCase {
     }
 
     func conversation(kind: ConversationKind = .group) -> Conversation {
-        var c = Conversation(); c.kind = kind; c.stableID = kind == .group ? "cid-stable" : "open-user"; c.profile = "corp:user"; c.listen = true; c.autoReply = true; c.agent.workdir = "/tmp"
+        var c = Conversation(); c.kind = kind; c.stableID = kind == .group ? "cid-stable" : "open-user"; c.profile = "corp:user"; c.listen = true; c.autoReply = true; c.trigger = .mentioned; c.agent.workdir = "/tmp"
         return c
     }
     func event(type: String = "user_im_message_receive_group", message: String = "m1", target: String = "cid-stable", sender: String = "open-user", content: String = "你好") throws -> IMEvent {
@@ -26,16 +26,48 @@ final class CoreTests: XCTestCase {
     }
     func testOnlyRealAtEventsTriggerMentionReply() throws {
         let c = conversation()
-        XCTAssertFalse(EventRouting.shouldReply(try event(content: "@我的名字"), profile: c.profile, conversation: c))
-        XCTAssertTrue(EventRouting.shouldReply(try event(type: "user_im_message_receive_at"), profile: c.profile, conversation: c))
-        XCTAssertFalse(EventRouting.shouldReply(try event(type: "user_im_message_reaction_group"), profile: c.profile, conversation: c))
+        XCTAssertFalse(EventRouting.shouldReply(try event(content: "@我的名字"), profile: c.profile, conversation: c, currentSenderID: "self-open"))
+        XCTAssertTrue(EventRouting.shouldReply(try event(type: "user_im_message_receive_at"), profile: c.profile, conversation: c, currentSenderID: "self-open"))
+        XCTAssertFalse(EventRouting.shouldReply(try event(type: "user_im_message_reaction_group"), profile: c.profile, conversation: c, currentSenderID: "self-open"))
+    }
+    func testReplyTriggersCheckVerifiedSenderAndRealMention() throws {
+        for trigger in ReplyTrigger.allCases {
+            var c = conversation(); c.trigger = trigger
+            let cases: [(String, String, Bool)] = [
+                ("user_im_message_receive_group", "open-user", trigger == .all),
+                ("user_im_message_receive_at", "open-user", trigger != .selfMentioned),
+                ("user_im_message_receive_at", "user", trigger != .selfMentioned),
+                ("user_im_message_receive_group", "self-open", false),
+                ("user_im_message_receive_at", "self-open", true),
+                ("user_im_message_receive_at", "", false)
+            ]
+            for (type, sender, expected) in cases {
+                let e = try event(type: type, sender: sender, content: "@自己 请处理")
+                XCTAssertEqual(EventRouting.shouldReply(e, profile: c.profile, conversation: c, currentSenderID: "self-open"), expected, "\(trigger) / \(type) / \(sender)")
+                XCTAssertFalse(EventRouting.shouldReply(e, profile: c.profile, conversation: c, currentSenderID: ""))
+            }
+        }
+        var contact = conversation(kind: .contact); contact.trigger = .selfMentioned
+        XCTAssertTrue(EventRouting.shouldReply(try event(type: "user_im_message_receive_o2o"), profile: contact.profile, conversation: contact, currentSenderID: "self-open"), "Group mention preferences do not disable direct replies")
+    }
+    func testReplyTriggerDefaultsAndSavedChoicesSurviveDecoding() throws {
+        var c = conversation()
+        for trigger in ReplyTrigger.allCases {
+            c.trigger = trigger
+            XCTAssertEqual(try JSONDecoder().decode(Conversation.self, from: JSONEncoder().encode(c)).trigger, trigger)
+        }
+        var row = try JSONSerialization.jsonObject(with: JSONEncoder().encode(c)) as! [String: Any]
+        row.removeValue(forKey: "trigger")
+        XCTAssertEqual(try JSONDecoder().decode(Conversation.self, from: JSONSerialization.data(withJSONObject: row)).trigger, .selfMentioned)
+        row["trigger"] = "unrecognized"
+        XCTAssertThrowsError(try JSONDecoder().decode(Conversation.self, from: JSONSerialization.data(withJSONObject: row)))
     }
     func testPausedAndObserveOnlyNeverReply() throws {
         var c = conversation(); c.trigger = .all
-        XCTAssertTrue(EventRouting.shouldReply(try event(), profile: c.profile, conversation: c))
+        XCTAssertTrue(EventRouting.shouldReply(try event(), profile: c.profile, conversation: c, currentSenderID: "self-open"))
         c.autoReply = false
         XCTAssertTrue(EventRouting.matches(try event(), profile: c.profile, conversation: c))
-        XCTAssertFalse(EventRouting.shouldReply(try event(), profile: c.profile, conversation: c))
+        XCTAssertFalse(EventRouting.shouldReply(try event(), profile: c.profile, conversation: c, currentSenderID: "self-open"))
         c.listen = false; c.autoReply = true
         XCTAssertFalse(EventRouting.matches(try event(), profile: c.profile, conversation: c))
     }
@@ -65,7 +97,7 @@ final class CoreTests: XCTestCase {
         XCTAssertFalse(try reopened.reserve(personal, route: "route"))
     }
     func testConfigurationIsSafeByDefaultAndStoresNoSecrets() throws {
-        let c = Conversation(); XCTAssertFalse(c.listen); XCTAssertFalse(c.autoReply); XCTAssertTrue(c.showAITag)
+        let c = Conversation(); XCTAssertFalse(c.listen); XCTAssertFalse(c.autoReply); XCTAssertTrue(c.showAITag); XCTAssertEqual(c.trigger, .selfMentioned)
         let json = String(decoding: try JSONEncoder().encode(DashboardConfig()), as: UTF8.self)
         XCTAssertFalse(json.contains("secret")); XCTAssertFalse(json.contains("token"))
     }
@@ -102,11 +134,11 @@ final class CoreTests: XCTestCase {
         var config = DashboardConfig(); config.executablePaths["dws"] = "/bin/echo"
         let c = conversation(kind: .contact)
         let original = try event(type: "user_im_message_receive_o2o", target: "cid-private")
-        let spec = try Commands.reaction(.processing, event: original, conversation: c, config: config)
+        let spec = try Commands.reaction(.processing, event: original, conversation: c, currentSenderID: "self-open", config: config)
         XCTAssertTrue(spec.arguments.contains("cid-private")); XCTAssertFalse(spec.arguments.contains(c.stableID))
         XCTAssertTrue(spec.arguments.contains("m1")); XCTAssertTrue(spec.arguments.contains("思考"))
-        XCTAssertThrowsError(try Commands.reaction(.completed, event: event(sender: "other"), conversation: c, config: config))
-        XCTAssertThrowsError(try Commands.reaction(.completed, event: event(type: "user_im_message_receive_o2o", target: ""), conversation: c, config: config))
+        XCTAssertThrowsError(try Commands.reaction(.completed, event: event(sender: "other"), conversation: c, currentSenderID: "self-open", config: config))
+        XCTAssertThrowsError(try Commands.reaction(.completed, event: event(type: "user_im_message_receive_o2o", target: ""), conversation: c, currentSenderID: "self-open", config: config))
     }
     func testDataMigrationPreservesLedgerAndLeavesExistingDestinationAlone() throws {
         let parent = try temporaryStore().directory

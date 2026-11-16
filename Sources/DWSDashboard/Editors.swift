@@ -38,7 +38,7 @@ struct ConversationEditor: View {
                                     LabeledContent("回复触发方式") {
                                         Picker("回复触发方式", selection: $value.trigger) { ForEach(ReplyTrigger.allCases) { Text($0.title).tag($0) } }.configurationPicker()
                                     }
-                                    Text("手动 @自己也可触发回复；助手发出的回复会自动过滤。")
+                                    Text(value.trigger.detail)
                                         .font(.caption).foregroundStyle(DashboardTheme.muted)
                                 }
                             }

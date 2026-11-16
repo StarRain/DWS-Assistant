@@ -98,7 +98,7 @@ final class DashboardModel: ObservableObject {
         if listenerIdentity == nil { return "核验账号中" }
         if let state = replyStates[c.id] { return state }
         let state = listenerStates[c.id.uuidString] ?? "连接中"
-        if state == "监听中", c.kind == .group, c.autoReply, c.trigger == .mentioned,
+        if state == "监听中", c.kind == .group, c.autoReply, c.trigger != .all,
            listenerStates["at|" + c.profile] != "监听中" { return "等待 @ 通道" }
         if state == "监听中", c.autoReply, c.replyFormat == .aiCard,
            listenerStates["card|" + c.profile] != "监听中" { return "等待卡片通道" }
@@ -630,7 +630,7 @@ final class DashboardModel: ObservableObject {
             let key = DeliveryLedger.key(identity: "personal", profile: profile, target: c.stableID, messageID: event.messageID)
             if receivedKeys.insert(key).inserted { receivedCount += 1; log("「\(c.title)」收到新消息") }
             if receivedKeys.count > 10_000 { receivedKeys.removeAll(keepingCapacity: true) }
-            guard EventRouting.shouldReply(event, profile: profile, conversation: c) else { continue }
+            guard EventRouting.shouldReply(event, profile: profile, conversation: c, currentSenderID: identity.senderID) else { continue }
             guard replyQueues[c.id, default: []].count < 3 else { log("「\(c.title)」回复队列已满，本条未安排回复", level: "提示"); continue }
             do {
                 guard try ledger?.reserve(key, route: c.id.uuidString) == true else { continue }
@@ -772,6 +772,9 @@ final class DashboardModel: ObservableObject {
             do { try ledger?.mark(key, .cancelled) } catch { report(error); stopPersonal() }
             processNext(id); return
         }
+        // Keep the verified identity for reaction cleanup after stopping clears
+        // the active listener identity. Never infer it from the incoming sender.
+        let currentSenderID = listenerIdentity?.senderID ?? ""
         replyTasks[id] = Task { [weak self] in
             guard let self else { return }
             var attemptedSend = false
@@ -783,13 +786,13 @@ final class DashboardModel: ObservableObject {
             var imageLease: ImageCacheLease?
             let feedback = c.showReplyStatus && !event.conversationID.isEmpty
             // Feedback runs beside generation and never delays sending the answer.
-            let processing = feedback ? Task { await self.changeReaction(.processing, event: event, conversation: c) } : nil
+            let processing = feedback ? Task { await self.changeReaction(.processing, event: event, conversation: c, currentSenderID: currentSenderID) } : nil
             defer {
                 if let imageLease {
                     do { try self.imageCache?.release(imageLease) }
                     catch { self.log("图片临时缓存清理失败，已保留空间占用额度", level: "错误") }
                 }
-                if let processing { self.finishReactions(processing: processing, terminal: terminal, event: event, conversation: c) }
+                if let processing { self.finishReactions(processing: processing, terminal: terminal, event: event, conversation: c, currentSenderID: currentSenderID) }
                 self.replyStates.removeValue(forKey: id)
                 self.replyTasks.removeValue(forKey: id); self.finishStopping()
                 if generation == self.epoch { self.processNext(id) }
@@ -801,7 +804,7 @@ final class DashboardModel: ObservableObject {
                       let identity = self.listenerIdentity, identity.profile == c.profile,
                       EventRouting.isIncoming(event, currentSenderID: identity.senderID),
                       let current = self.config.conversations.first(where: { $0.id == id }), current == c,
-                      EventRouting.shouldReply(event, profile: c.profile, conversation: current) else { throw DashboardError.cancelled }
+                      EventRouting.shouldReply(event, profile: c.profile, conversation: current, currentSenderID: identity.senderID) else { throw DashboardError.cancelled }
             }
             do {
                 try checkCurrent()
@@ -936,9 +939,9 @@ final class DashboardModel: ObservableObject {
         }
     }
 
-    private func changeReaction(_ reaction: ReplyReaction, remove: Bool = false, event: IMEvent, conversation: Conversation) async {
+    private func changeReaction(_ reaction: ReplyReaction, remove: Bool = false, event: IMEvent, conversation: Conversation, currentSenderID: String) async {
         do {
-            let result = try await ProcessRunner.run(Commands.reaction(reaction, remove: remove, event: event, conversation: conversation, config: config))
+            let result = try await ProcessRunner.run(Commands.reaction(reaction, remove: remove, event: event, conversation: conversation, currentSenderID: currentSenderID, config: config))
             let object = try JSONOutput.object(result)
             let data = JSONOutput.payload(object)
             let nested = data["result"] as? [String: Any] ?? data
@@ -946,15 +949,15 @@ final class DashboardModel: ObservableObject {
         } catch { log("「\(conversation.title)」\(remove ? "移除" : "添加")状态表情失败，正文回复不受影响", level: "提示") }
     }
 
-    private func finishReactions(processing: Task<Void, Never>, terminal: ReplyReaction?, event: IMEvent, conversation: Conversation) {
+    private func finishReactions(processing: Task<Void, Never>, terminal: ReplyReaction?, event: IMEvent, conversation: Conversation, currentSenderID: String) {
         let id = UUID()
         feedbackTasks[id] = Task {
             defer { self.feedbackTasks.removeValue(forKey: id); self.finishStopping() }
             // Wait for the original add before removing it, so a slow add cannot
             // reintroduce a stale processing reaction after the final state.
             await processing.value
-            await self.changeReaction(.processing, remove: true, event: event, conversation: conversation)
-            if let terminal { await self.changeReaction(terminal, event: event, conversation: conversation) }
+            await self.changeReaction(.processing, remove: true, event: event, conversation: conversation, currentSenderID: currentSenderID)
+            if let terminal { await self.changeReaction(terminal, event: event, conversation: conversation, currentSenderID: currentSenderID) }
         }
     }
 

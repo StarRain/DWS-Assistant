@@ -52,9 +52,16 @@ public enum EventRouting {
         }
         return ["user_im_message_receive_group", "user_im_message_receive_at"].contains(event.type) && event.conversationID == conversation.stableID
     }
-    public static func shouldReply(_ event: IMEvent, profile: String, conversation: Conversation) -> Bool {
+    public static func shouldReply(_ event: IMEvent, profile: String, conversation: Conversation, currentSenderID: String) -> Bool {
         guard matches(event, profile: profile, conversation: conversation), conversation.autoReply, !event.content.isEmpty || !event.imageMessageIDs.isEmpty else { return false }
-        return conversation.kind == .contact || conversation.trigger == .all || event.type == "user_im_message_receive_at"
+        guard isIncoming(event, currentSenderID: currentSenderID) else { return false }
+        if conversation.kind == .contact { return true }
+        switch conversation.trigger {
+        case .all: return true
+        case .mentioned: return event.type == "user_im_message_receive_at"
+        case .selfMentioned:
+            return event.type == "user_im_message_receive_at" && event.senderID == currentSenderID
+        }
     }
     public static func prompt(event: IMEvent, context: [String], format: ReplyFormat = .text, images: [String] = []) -> String {
         let payload: [String: Any] = ["recent_conversation": context, "message": event.content, "attached_images": images]

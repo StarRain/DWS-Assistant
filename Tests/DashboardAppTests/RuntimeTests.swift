@@ -509,9 +509,9 @@ final class RuntimeTests: XCTestCase {
     }
 
     func testManualSelfMentionRepliesButAssistantEchoBeforeReceiptDoesNot() async throws {
-        for mentioned in [false, true] {
+        for trigger in ReplyTrigger.allCases {
             let (model, dir) = try fixture(slowAI: false)
-            var config = model.config; config.conversations[0].trigger = mentioned ? .mentioned : .all
+            var config = model.config; config.conversations[0].trigger = trigger
             config.conversations[0].showAITag = false; try model.persist(config)
             try writeEvents([("group", "ordinary", "self-open", "@测试账号 普通文本并不是真实提及"),
                              ("at", "manual-at", "self-open", "请帮我处理")], to: dir.appendingPathComponent("events.ndjson"))
@@ -528,6 +528,34 @@ final class RuntimeTests: XCTestCase {
             XCTAssertEqual(try String(contentsOf: dir.appendingPathComponent("generations"), encoding: .utf8).split(separator: "\n").count, 1)
             let reactions = try String(contentsOf: dir.appendingPathComponent("reactions"), encoding: .utf8)
             XCTAssertTrue(reactions.contains("manual-at")); XCTAssertFalse(reactions.contains("mock-sent")); XCTAssertFalse(reactions.contains("echo-body"))
+        }
+    }
+
+    func testSelfMentionOnlyIgnoresOtherPeopleAndDeduplicatesOwnMention() async throws {
+        let (model, dir) = try fixture(slowAI: false)
+        var config = model.config; config.conversations[0].trigger = .selfMentioned
+        try model.persist(config)
+        try writeEvents([
+            ("group", "other-message", "sender", "请帮我处理"),
+            ("at", "other-mention", "sender", "@自己 请帮我处理"),
+            ("at", "wrong-id", "user", "我是当前账号"),
+            ("at", "missing-sender", "", "请帮我处理"),
+            ("group", "fake-mention", "self-open", "@自己 普通文本"),
+            ("group", "own-mention", "self-open", "请帮我处理"),
+            ("at", "own-mention", "self-open", "请帮我处理"),
+            ("at", "own-mention", "self-open", "重复事件")
+        ], to: dir.appendingPathComponent("events.ndjson"))
+        model.startPersonal()
+        for _ in 0..<100 where model.deliveredCount < 1 { try await Task.sleep(for: .milliseconds(20)) }
+        _ = await model.stopAll()
+        XCTAssertEqual(model.deliveredCount, 1, model.activities.map(\.message).joined(separator: "\n"))
+        XCTAssertEqual(model.recentDeliveries.count, 1)
+        XCTAssertEqual(try String(contentsOf: dir.appendingPathComponent("generations"), encoding: .utf8).split(separator: "\n").count, 1)
+        XCTAssertEqual(try String(contentsOf: dir.appendingPathComponent("sends"), encoding: .utf8).split(separator: "\n").count, 1)
+        let reactions = try String(contentsOf: dir.appendingPathComponent("reactions"), encoding: .utf8)
+        XCTAssertTrue(reactions.contains("--msg-id own-mention"))
+        for ignored in ["other-message", "other-mention", "wrong-id", "missing-sender", "fake-mention"] {
+            XCTAssertFalse(reactions.contains("--msg-id \(ignored)"))
         }
     }
 
@@ -889,7 +917,7 @@ final class RuntimeTests: XCTestCase {
     func testMentionSubscriptionRemainsUntilLastInterestedGroupStops() async throws {
         let (model, dir) = try fixture(slowAI: false)
         var config = model.config; config.conversations[0].trigger = .mentioned
-        var peer = config.conversations[0]; peer.id = UUID(); peer.stableID = "cid-peer"
+        var peer = config.conversations[0]; peer.id = UUID(); peer.stableID = "cid-peer"; peer.trigger = .selfMentioned
         config.conversations.append(peer); try model.persist(config)
         model.startPersonal()
         let key = "at|corp:user"

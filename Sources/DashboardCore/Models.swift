@@ -84,9 +84,22 @@ public enum ConversationKind: String, Codable, CaseIterable, Identifiable {
 }
 
 public enum ReplyTrigger: String, Codable, CaseIterable, Identifiable {
-    case all, mentioned
+    case all, mentioned, selfMentioned
     public var id: String { rawValue }
-    public var title: String { self == .all ? "收到消息自动回复" : "仅 @我 回复" }
+    public var title: String {
+        switch self {
+        case .all: return "收到消息自动回复"
+        case .mentioned: return "仅 @自己 回复"
+        case .selfMentioned: return "仅自己 @自己 回复"
+        }
+    }
+    public var detail: String {
+        switch self {
+        case .all: return "收到他人消息或本人手动 @自己时回复；助手发出的回复会自动过滤。"
+        case .mentioned: return "他人或本人 @当前登录账号时回复；助手发出的回复会自动过滤。"
+        case .selfMentioned: return "仅当前登录账号本人手动 @自己时回复；他人消息和助手回复不会触发。"
+        }
+    }
 }
 
 public enum ReplyFormat: String, Codable, CaseIterable, Identifiable {
@@ -107,7 +120,7 @@ public struct Conversation: Codable, Identifiable, Equatable {
     public var profile = ""
     public var listen = false
     public var autoReply = false
-    public var trigger: ReplyTrigger = .mentioned
+    public var trigger: ReplyTrigger = .selfMentioned
     public var replyFormat: ReplyFormat = .text
     public var cardInteractionTimeout = Self.defaultCardInteractionTimeout
     public var agent = AgentSettings()
@@ -124,7 +137,7 @@ public struct Conversation: Codable, Identifiable, Equatable {
         profile = try values.decode(String.self, forKey: .profile)
         listen = try values.decode(Bool.self, forKey: .listen)
         autoReply = try values.decode(Bool.self, forKey: .autoReply)
-        trigger = try values.decode(ReplyTrigger.self, forKey: .trigger)
+        trigger = try values.decodeIfPresent(ReplyTrigger.self, forKey: .trigger) ?? .selfMentioned
         replyFormat = try values.decodeIfPresent(ReplyFormat.self, forKey: .replyFormat) ?? .text
         cardInteractionTimeout = try values.decodeIfPresent(Int.self, forKey: .cardInteractionTimeout) ?? Self.defaultCardInteractionTimeout
         agent = try values.decode(AgentSettings.self, forKey: .agent)
