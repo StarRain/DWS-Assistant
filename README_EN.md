@@ -50,7 +50,8 @@ Captured in preview mode. Account details, chats and statistics are sample data.
 
 - Define reply guidelines or task steps for each chat. There is no limit on the number of rules; each rule supports up to 2,000 characters.
 - Add and edit rules in a separate dialog. Enable, edit or delete them from the list, or clone selected rules from another chat as independent copies.
-- Each DingTalk group or direct chat maps to one Codex chat. Model and reasoning changes apply on the next turn.
+- Each DingTalk group or direct chat maps to its own Codex chat in `~/.dws-dashboard/codex/`. Model and reasoning changes apply on the next turn of the same chat.
+- Open **History** on a Codex chat row to read messages, replies and execution records, refresh them or load earlier records. Viewing history does not start an AI task.
 - Customize the Codex chat name, or leave it blank to use the group or contact name.
 - Authorized directories are empty by default. You can add multiple directories and configure execution permissions separately.
 
@@ -60,6 +61,7 @@ Captured in preview mode. Account details, chats and statistics are sample data.
 - Light, dark and system appearance, with consistent vector icons.
 - Control the assistant and view statistics and recent activity from the menu bar or quick panel.
 - Closing the main window hides the Dock icon while keeping the menu bar and running services available.
+- Quitting stops listeners and active tasks, then exits after cleanup. If stopping is incomplete, the app stays open so you can retry.
 - Optional launch at macOS login. Launching the app does not automatically start listening.
 
 Interface language does not change chat names, custom rules, engine settings, AI reply language or the original logs stored on disk. Raw output from DWS and AI engines remains in its original language.
@@ -105,7 +107,7 @@ The output is `dist/DWS Assistant.app`. Copy it to Applications and open it. The
 2. Open **Groups** or **Direct chats**, click **Add group** or **Add contact**, then search and select a chat.
 3. Enable listening and automatic replies. Choose a trigger, reply format and AI engine. Add authorized directories when the AI needs to read a project.
 4. To define reply style or task steps, open **AI reply settings → Custom rules**. Save the chat settings after editing rules.
-5. Turn on **DWS Assistant** at the bottom left. You can close the main window and keep using the menu bar. **Stop assistant and quit** stops the services and exits.
+5. Turn on **DWS Assistant** at the bottom left. You can close the main window and keep using the menu bar. **Stop assistant and quit** stops the services, waits for cleanup, then exits.
 
 Group reply triggers:
 
@@ -123,6 +125,14 @@ Assistant replies never trigger another reply. Existing chats keep their saved t
 | `⌘Q` | Stop the assistant and quit |
 
 Additional implementation and behavior details are available in the [configuration guide (Chinese)](docs/CONFIGURATION.md).
+
+### Codex chats and history
+
+Each group or direct chat has its own Codex context. Changes to the model, reasoning level, authorized directories, execution permissions, rules or chat name apply on the next turn without creating a new chat.
+
+Click **History** in the chat list to view user messages, AI replies and execution records for the currently bound chat, including expandable command details. The panel only reads this app's saved records. It does not start the AI, acquire the chat's writer lock, or display internal instructions or reasoning records.
+
+After switching to dedicated storage, the first reply creates a new Codex chat without adopting or migrating old history. Existing desktop Codex records remain intact. New DingTalk chats do not appear in the recent chats of desktop Codex using its default storage. If this app's native chat record has been deleted, a replacement is created only after Codex confirms the record is missing and before task execution starts; the log reports the lost context.
 
 ### Settings and rule priority
 
@@ -142,9 +152,11 @@ Likewise, a rule saying “run the build script” does not grant write access. 
 
 - The app is named DWS Assistant, with Bundle ID `com.starrain.dwsassistant`. The rename keeps the existing data directory.
 - Dashboard data lives in `~/.dws-dashboard`, including configuration, activity logs, delivery records and engine chat mappings.
+- Codex message content, execution records, databases, runtime logs and writer locks live in `~/.dws-dashboard/codex/`, separate from authorized project directories and desktop Codex history.
 - DWS and AI engines keep their own sign-in state. The app does not migrate their credentials.
+- The dedicated Codex directory links to existing configuration, sign-in files, rules, skills and other inputs. It does not copy old chats or share desktop databases or writer locks.
 - Authorized directories are empty by default. Adding a directory does not elevate execution permissions. The directory list is not a complete file-reading sandbox; actual access depends on the engine's permissions.
-- Ordinary message bodies are not written to activity logs. AI card delivery records include card content and interaction definitions. AI engines may also retain their own chat history.
+- Ordinary message bodies are not written to activity logs. AI card delivery records include card content and interaction definitions. Native Codex chat records include message and reply content; other AI engines may also retain their own chat history.
 - Images are cached temporarily: up to 64 MiB total, 8 MiB per image and 4 images per message, cleared after processing.
 - Unconfirmed deliveries are retained for investigation and are not automatically resent. Expired interactive cards cannot execute tasks.
 
@@ -176,7 +188,7 @@ Assets                     Brand and vector UI assets
 scripts                    Build, icon generation and license collection
 ```
 
-Tests use temporary directories and mocked CLIs. They cover routing, reply loop prevention, chat recovery, configuration changes, image caching, interactive cards and language switching. Automated tests do not send messages to real DingTalk chats.
+Tests use temporary directories and mocked CLIs. They cover routing, reply loop prevention, chat recovery and storage isolation, read-only history, configuration changes, image caching, interactive cards, language switching and cleanup before quitting. Automated tests do not send messages to real DingTalk chats.
 
 ## Related projects
 
