@@ -67,14 +67,14 @@ public struct AICardReply {
                 children.append(id)
                 if q.required {
                     let condition: [String: Any] = q.type == .text
-                        ? ["call": "regex", "args": ["value": ["path": path], "pattern": "\\S"]]
+                        ? ["call": "regex", "args": ["value": ["path": path], "pattern": "[\\s\\S]*\\S[\\s\\S]*"]]
                         : ["call": "required", "args": ["value": ["path": path]]]
                     checks.append(["condition": condition, "message": "请填写：" + q.label])
                 }
             }
             model["answers"] = answers
             children += ["actions", "interaction-hint", "interaction-countdown"]
-            components.append(["id": "actions", "component": "Row", "children": checks.isEmpty ? ["cancel", "submit"] : ["cancel", "submit-disabled", "submit"]])
+            components.append(["id": "actions", "component": "Row", "children": ["cancel", "submit"]])
             for action in ["cancel", "submit"] {
                 var context: [String: Any] = ["dashboardProtocol": "dws-dashboard-v1", "interactionToken": interaction.token, "surfaceId": surfaceID, "action": action]
                 if action == "submit" { context["answers"] = ["path": "/answers"] }
@@ -82,17 +82,12 @@ public struct AICardReply {
                                             "variant": action == "submit" ? "primary" : "default",
                                             "action": ["event": ["name": "dws_dashboard_" + action, "context": context]]]
                 if action == "submit" && !checks.isEmpty {
-                    let conditions = checks.map { $0["condition"] as! [String: Any] }
-                    let ready: [String: Any] = conditions.count == 1 ? conditions[0] : ["call": "and", "args": ["values": conditions]]
+                    // Input edits are local to DingTalk. Its disabled field is
+                    // literal-only, and visibility-swapped buttons can retain
+                    // their initial state after edits. Keep one primary action;
+                    // native checks read the latest values when clicked. The
+                    // host validates the callback again before claiming a task.
                     button["checks"] = checks
-                    button["visible"] = ready
-                    // DingTalk's disabled field is a literal boolean. Swap two
-                    // complementary visible states locally as the form changes.
-                    var disabled = button
-                    disabled["id"] = "submit-disabled"; disabled["child"] = "submit-disabled-label"
-                    disabled["disabled"] = true
-                    disabled["visible"] = ["call": "not", "args": ["value": ready]]
-                    components += [disabled, ["id": "submit-disabled-label", "component": "Text", "text": interaction.form.submitLabel]]
                 }
                 components += [button, ["id": action + "-label", "component": "Text", "text": action == "submit" ? interaction.form.submitLabel : "取消"]]
             }
