@@ -166,7 +166,7 @@ final class CoreTests: XCTestCase {
         let b = try JSONSerialization.jsonObject(with: Data(fast.stdin!.utf8)) as! [String: Any]
         XCTAssertEqual(b["reasoning_effort"] as? String, "low")
         XCTAssertEqual(a["scope_id"] as? String, b["scope_id"] as? String)
-        XCTAssertNotEqual(a["legacy_scope_id"] as? String, b["legacy_scope_id"] as? String)
+        XCTAssertNil(b["legacy_scope_id"])
     }
     func testPersonalUsesOfficialBridgeWithSeparateScopes() throws {
         var settings = AgentSettings(); settings.workdir = "/tmp"

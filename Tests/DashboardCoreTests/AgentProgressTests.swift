@@ -91,7 +91,7 @@ final class AgentProgressTests: XCTestCase {
         }
         let original = try payload(false), progress = try payload(true)
         XCTAssertNil(original["report_progress"]); XCTAssertEqual(progress["report_progress"] as? Bool, true)
-        for key in ["scope_id", "legacy_scope_id", "conversation_id", "text"] { XCTAssertEqual(original[key] as? String, progress[key] as? String) }
+        for key in ["scope_id", "codex_home", "conversation_id", "text"] { XCTAssertEqual(original[key] as? String, progress[key] as? String) }
         settings.engine = .claude
         XCTAssertNil(try payload(true)["report_progress"])
     }

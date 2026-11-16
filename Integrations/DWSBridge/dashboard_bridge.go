@@ -34,11 +34,11 @@ type DashboardAgentRequest struct {
     AdditionalDirectories []string `json:"additional_directories"`
     AuthorizedDirectories []string `json:"authorized_directories"`
     StateDir string `json:"state_dir"`
+    CodexHome string `json:"codex_home"`
     FullPermission bool `json:"full_permission"`
     TimeoutSeconds int `json:"timeout_seconds"`
     ReasoningEffort string `json:"reasoning_effort"`
     CustomRules string `json:"custom_rules"`
-    LegacyScopeID string `json:"legacy_scope_id"`
     SessionTitle string `json:"session_title"`
     ReportProgress bool `json:"report_progress"`
 }
@@ -94,15 +94,21 @@ func runDashboardAgent(ctx context.Context, r DashboardAgentRequest, diagnostics
     // DWS state is isolated from the installed CLI. Engine login remains in its native store.
     if r.StateDir == "" || !strings.HasPrefix(r.StateDir, "/") { return "", errors.New("state dir must be absolute") }
     if err = os.MkdirAll(r.StateDir, 0700); err != nil { return "", err }
+    if r.Channel == "codex" && !filepath.IsAbs(r.CodexHome) { return "", errDashboardCodexStorage }
     attachments, err := dashboardImages(r)
     if err != nil { return "", err }
     os.Setenv("DWS_CONFIG_DIR", r.StateDir)
     os.Unsetenv("DWS_AGENT_CMD")
     os.Setenv("DWS_CONNECT_NO_INSTALL", "1")
-    if r.Channel == "codex" && (r.ReasoningEffort != "" || len(r.AdditionalDirectories) > 0) {
+    if r.Channel == "codex" && (r.ReasoningEffort != "" || len(r.AdditionalDirectories) > 0 || r.CodexHome != "") {
         original := codexExecCommandContext
         defer func() { codexExecCommandContext = original }()
         codexExecCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+            if r.CodexHome != "" {
+                home, _ := json.Marshal(r.CodexHome)
+                logs, _ := json.Marshal(filepath.Join(r.CodexHome, "logs"))
+                args = append(args, "-c", "sqlite_home="+string(home), "-c", "log_dir="+string(logs))
+            }
             // Keep the official DWS parser/session handling; only supply the
             // documented per-process Codex CLI config override.
             if r.ReasoningEffort != "" { args = append(args, "-c", "model_reasoning_effort=\""+r.ReasoningEffort+"\"") }
@@ -122,11 +128,7 @@ func runDashboardAgent(ctx context.Context, r DashboardAgentRequest, diagnostics
         }
     }
     opts := connectAgentOptions{Model: r.Model, WorkDir: r.WorkDir, Memory: true, Yolo: r.FullPermission, Timeout: time.Duration(r.TimeoutSeconds)*time.Second, PrivateDiagnostics: true}
-    scopeID := r.ScopeID
-    // Existing robot threads retain their attachment-only developer policy.
-    // Start a separate scope once, without deleting the old session store.
-    if r.Channel == "codex" { scopeID += "-project-policy-v1" }
-    fwd, err := newLocalAgentForwarder(r.Channel, scopeID, opts)
+    fwd, err := newLocalAgentForwarder(r.Channel, r.ScopeID, opts)
     if err != nil { return "", err }
     if f, ok := fwd.(*codexAppServerForwarder); ok {
         f.developerInstructions = dashboardCodexInstructions(r)
@@ -164,6 +166,7 @@ func runDashboardAgent(ctx context.Context, r DashboardAgentRequest, diagnostics
 }
 
 var errDashboardSessionStorage = errors.New("session binding could not be persisted")
+var errDashboardSessionBusy = errors.New("session has an active writer")
 var errDashboardEngineSettings = errors.New("current engine settings unavailable")
 
 // Reuse the official client, turn parser, attachment handling and session store.
@@ -171,21 +174,25 @@ var errDashboardEngineSettings = errors.New("current engine settings unavailable
 func dashboardCodexForward(ctx context.Context, f *codexAppServerForwarder, r DashboardAgentRequest, attachments []connectMediaAttachment, diagnostics *DashboardAgentResult) (string, error) {
     ctx, cancel := applyTimeout(ctx, f.timeout)
     defer cancel()
-    if err := dashboardAdoptCodexSession(f.sessions, r); err != nil { return "", err }
     state := f.sessions.state(r.ConversationID)
     state.mu.Lock()
     defer state.mu.Unlock()
+    oldID := f.sessions.threadID(r.ConversationID)
+    if err := dashboardPrepareCodexHome(r.CodexHome); err != nil { return "", fmt.Errorf("%w: %w", errDashboardCodexStorage, err) }
+    f.env = append(f.env, "CODEX_HOME="+r.CodexHome, "CODEX_SQLITE_HOME="+r.CodexHome)
     cli, err := codexNewAppServerClient(ctx, f.bin, f.env, f.cwd())
     if err != nil { return "", err }
     defer cli.close()
     if err := cli.initialize(ctx); err != nil { return "", err }
-    oldID := f.sessions.threadID(r.ConversationID)
     threadID := oldID
     params, err := dashboardCodexParams(ctx, cli, f, r, oldID)
     if err != nil { return "", err }
     if oldID != "" {
         threadID, err = cli.resumeThread(ctx, params)
         if err != nil {
+            if err.Error() == "thread "+oldID+" already has an active writer" {
+                return "", fmt.Errorf("%w: %w", errDashboardSessionBusy, err)
+            }
             // This exact error occurs before turn/start. All other errors stop;
             // in particular never replay a failed or uncertain execution.
             if ctx.Err() != nil || err.Error() != "no rollout found for thread id "+oldID {
@@ -281,34 +288,13 @@ func dashboardBindCodexThread(s *codexThreadSessions, conversationID, threadID s
     return nil
 }
 
-func dashboardAdoptCodexSession(s *codexThreadSessions, r DashboardAgentRequest) error {
-    if r.LegacyScopeID == "" || s.threadID(r.ConversationID) != "" { return nil }
-    // Prefer the old binding for the current settings, then the most recently
-    // used project-policy binding for exactly this account/conversation.
-    threadID := newCodexThreadSessions(codexThreadStorePath(r.LegacyScopeID+"-project-policy-v1")).threadID(r.ConversationID)
-    if threadID == "" {
-        var latest time.Time
-        entries, _ := os.ReadDir(filepath.Dir(filepath.Dir(s.path)))
-        for _, entry := range entries {
-            if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "dashboard-") || !strings.HasSuffix(entry.Name(), "-project-policy-v1") { continue }
-            path := filepath.Join(filepath.Dir(filepath.Dir(s.path)), entry.Name(), "codex-threads.json")
-            if path == s.path { continue }
-            info, err := os.Stat(path)
-            if err != nil || !info.ModTime().After(latest) { continue }
-            if candidate := newCodexThreadSessions(path).threadID(r.ConversationID); candidate != "" {
-                latest = info.ModTime(); threadID = candidate
-            }
-        }
-    }
-    if threadID == "" { return nil }
-    return dashboardBindCodexThread(s, r.ConversationID, threadID)
-}
-
 // Emit categories only; raw engine errors may contain credentials or chat text.
 func DashboardAgentFailureReason(err error) string {
     if errors.Is(err, context.DeadlineExceeded) { return "engine_timeout" }
     if errors.Is(err, context.Canceled) { return "cancelled" }
     if errors.Is(err, errDashboardSessionStorage) { return "session_storage_failed" }
+    if errors.Is(err, errDashboardCodexStorage) { return "session_storage_unavailable" }
+    if errors.Is(err, errDashboardSessionBusy) { return "session_busy" }
     if errors.Is(err, errDashboardEngineSettings) { return "engine_settings_failed" }
     if errors.Is(err, errCodexEmployeeResumeFailed) { return "session_resume_failed" }
     var missing *exec.Error

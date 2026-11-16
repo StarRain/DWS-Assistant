@@ -198,7 +198,7 @@ public final class DeliveryLedger {
 }
 
 public enum Redaction {
-    public static func clean(_ text: String) -> String {
+    public static func clean(_ text: String, limit: Int = 4000) -> String {
         var result = text
         let patterns = [
             #"(?i)(Bearer\s+)[A-Za-z0-9._~+/=-]+"#,
@@ -210,6 +210,6 @@ public enum Redaction {
                 result = regex.stringByReplacingMatches(in: result, range: NSRange(result.startIndex..., in: result), withTemplate: "$1[已隐藏]")
             }
         }
-        return String(result.prefix(4000))
+        return String(result.prefix(max(0, limit)))
     }
 }

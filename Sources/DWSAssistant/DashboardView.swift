@@ -11,6 +11,7 @@ struct DashboardView: DashboardLocalizedView {
     @EnvironmentObject var model: DashboardModel
     @State private var query = ""
     @State private var editing: Conversation?
+    @State private var history: Conversation?
     @State private var discovery: ConversationKind?
     @State private var removing: Conversation?
     @State private var showingAccount = false
@@ -53,6 +54,7 @@ struct DashboardView: DashboardLocalizedView {
         .preferredColorScheme(model.config.appearance.colorScheme)
         .dashboardInputFocus()
         .sheet(item: $editing) { ConversationEditor(value: $0).environmentObject(model).environment(\.locale, model.config.language.locale) }
+        .sheet(item: $history) { ConversationHistoryView(conversation: $0, dataDirectory: model.dataURL).environment(\.locale, model.config.language.locale) }
         .sheet(item: $discovery) { ConversationDiscovery(kind: $0).environmentObject(model).environment(\.locale, model.config.language.locale) }
         .sheet(isPresented: $showingAccount) { AccountDetailsView().environmentObject(model).environment(\.locale, model.config.language.locale) }
         .confirmationDialog(l("删除「\(removing?.title ?? "")」？"), isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
@@ -245,6 +247,9 @@ struct DashboardView: DashboardLocalizedView {
             HStack(spacing: 10) {
                 statusPill(status, color: model.replyStates[c.id] != nil ? accent : status == "监听中" ? .green : .gray)
                     .lineLimit(2).frame(width: locale.identifier.hasPrefix("zh") ? 98 : 100, alignment: .leading)
+                if c.agent.engine == .codex {
+                    Button(l("会话历史")) { history = c }.buttonStyle(.bordered)
+                }
                 Button(l("配置")) { editing = c }.buttonStyle(.bordered)
                     .disabled(model.conversationBusy.contains(c.id))
                 Button(l("删除"), role: .destructive) { removing = c }.buttonStyle(.bordered).tint(.red)

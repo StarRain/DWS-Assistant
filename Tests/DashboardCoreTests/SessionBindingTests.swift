@@ -18,12 +18,13 @@ final class SessionBindingTests: XCTestCase {
         c.replyFormat = .aiCard; c.cardInteractionTimeout = 60; c.showAITag = false
         let changed = try payload(c)
         XCTAssertEqual(original["scope_id"] as? String, changed["scope_id"] as? String)
+        XCTAssertEqual(changed["scope_id"] as? String, CodexHistory.scope(route: c.routingKey))
         XCTAssertEqual(original["conversation_id"] as? String, changed["conversation_id"] as? String)
         XCTAssertEqual(changed["model"] as? String, "next-model")
         XCTAssertEqual(changed["reasoning_effort"] as? String, "low")
         XCTAssertEqual(changed["timeout_seconds"] as? Int, 180)
         XCTAssertEqual(changed["full_permission"] as? Bool, true)
-        XCTAssertNotEqual(original["legacy_scope_id"] as? String, changed["legacy_scope_id"] as? String)
+        XCTAssertNil(changed["legacy_scope_id"])
         for edit in [0, 1, 2] {
             var other = c
             if edit == 0 { other.profile = "corp:other" }
@@ -51,7 +52,7 @@ final class SessionBindingTests: XCTestCase {
     }
 
     func testBridgeFailuresShowSafeActionableMessagesOnNonzeroExit() throws {
-        for (reason, detail) in ["session_resume_failed": "历史会话恢复失败", "session_storage_failed": "会话绑定保存失败", "engine_timeout": "执行超时", "authentication_required": "登录已失效", "unknown": "执行失败"] {
+        for (reason, detail) in ["session_resume_failed": "历史会话恢复失败", "session_busy": "历史会话正被其他 Codex 客户端占用", "session_storage_unavailable": "无法准备 Codex 专用会话目录", "session_storage_failed": "会话绑定保存失败", "engine_timeout": "执行超时", "authentication_required": "登录已失效", "unknown": "执行失败"] {
             let json = try JSONSerialization.data(withJSONObject: ["error": "official_adapter_failed", "is_error": true, "reason": reason, "details": "secret-do-not-expose"])
             let result = CommandResult(status: 1, stdout: String(decoding: json, as: UTF8.self), stderr: "secret-do-not-expose")
             XCTAssertThrowsError(try Commands.finalAnswer(result, engine: .codex)) { error in

@@ -12,7 +12,6 @@ import (
     "path/filepath"
     "strings"
     "testing"
-    "time"
 )
 
 func dashboardCodexLifecycleStub(t *testing.T, dir, mode string) string {
@@ -24,6 +23,9 @@ func dashboardCodexLifecycleStub(t *testing.T, dir, mode string) string {
     t.Setenv("DASHBOARD_STUB_SERVER", script)
     if err := os.WriteFile(script, []byte(`
 import sys, json, os
+if os.environ.get("DASHBOARD_STUB_ENV_LOG"):
+    with open(os.environ["DASHBOARD_STUB_ENV_LOG"], "w") as out:
+        json.dump({"Home":os.environ.get("CODEX_HOME"),"SQLite":os.environ.get("CODEX_SQLITE_HOME"),"Args":sys.argv},out)
 mode = os.environ["DASHBOARD_STUB_MODE"]
 thread = ""
 def emit(value):
@@ -43,6 +45,7 @@ for line in sys.stdin:
         if mode.startswith("missing") and thread == "thr_missing":
             error("no rollout found for thread id " + thread)
         elif mode == "resume_denied": error("Unauthorized secret-do-not-expose")
+        elif mode == "resume_busy": error("thread " + thread + " already has an active writer")
         elif mode == "resume_eof": sys.exit(1)
         else:
             if mode == "rotated" and thread == "thr_existing": thread = "thr_rotated"
@@ -66,7 +69,7 @@ for line in sys.stdin:
         else: result({})
     else: error("unexpected method")
 `), 0600); err != nil { t.Fatal(err) }
-    writeShellExecutable(t, dir, "codex", `exec /usr/bin/python3 -u "$DASHBOARD_STUB_SERVER"`)
+    writeShellExecutable(t, dir, "codex", `exec /usr/bin/python3 -u "$DASHBOARD_STUB_SERVER" "$@"`)
     t.Setenv("PATH", dir+":/usr/bin:/bin")
     return log
 }
@@ -80,6 +83,7 @@ func TestDashboardBridgeRecoversOnlyExplicitlyMissingCodexSession(t *testing.T) 
     }{
         {"missing", false, true, 1, 1, "thr_recovered"},
         {"resume_denied", true, false, 0, 0, "thr_existing"},
+        {"resume_busy", true, false, 0, 0, "thr_existing"},
         {"resume_eof", true, false, 0, 0, "thr_existing"},
         {"turn_failed", true, false, 0, 1, "thr_existing"},
         {"turn_eof", true, false, 0, 1, "thr_existing"},
@@ -92,13 +96,14 @@ func TestDashboardBridgeRecoversOnlyExplicitlyMissingCodexSession(t *testing.T) 
         dir, state := t.TempDir(), t.TempDir()
         log := dashboardCodexLifecycleStub(t, dir, tc.mode)
         t.Setenv("DWS_CONFIG_DIR", state)
-        req := DashboardAgentRequest{Channel:"codex",ConversationID:"conversation",ScopeID:"scope",Text:"current request",WorkDir:dir,StateDir:state,TimeoutSeconds:10}
-        path := codexThreadStorePath(req.ScopeID+"-project-policy-v1")
+        req := DashboardAgentRequest{Channel:"codex",CodexHome:t.TempDir(),ConversationID:"conversation",ScopeID:"scope",Text:"current request",WorkDir:dir,StateDir:state,TimeoutSeconds:10}
+        path := codexThreadStorePath(req.ScopeID)
         seed := "thr_existing"
         if strings.HasPrefix(tc.mode, "missing") { seed = "thr_missing" }
         newCodexThreadSessions(path).setThreadID(req.ConversationID, seed)
         result, err := RunDashboardAgentWithStatus(context.Background(), req)
         if (err != nil) != tc.wantError || result.SessionRecreated != tc.recreated { t.Fatalf("result=%+v err=%v", result, err) }
+        if tc.mode == "resume_busy" && DashboardAgentFailureReason(err) != "session_busy" { t.Fatalf("writer conflict misclassified: %v",err) }
         if !tc.wantError && result.Answer != "recovered answer" { t.Fatalf("answer=%q", result.Answer) }
         if got := newCodexThreadSessions(path).threadID(req.ConversationID); got != tc.binding { t.Fatalf("binding=%q want=%q",got,tc.binding) }
         bytes, _ := os.ReadFile(log); protocol := string(bytes)
@@ -112,29 +117,20 @@ func TestDashboardBridgeRecoversOnlyExplicitlyMissingCodexSession(t *testing.T) 
     }) }
 }
 
-func TestDashboardBridgeAdoptsLegacyBindingAndKeepsCurrentSettings(t *testing.T) {
-    for _, mode := range []string{"exact","latest"} { t.Run(mode,func(t *testing.T) {
+func TestDashboardBridgeKeepsCurrentSettingsOnBoundSession(t *testing.T) {
         clearChannelEnv(t)
         dir, state := t.TempDir(), t.TempDir()
         log := dashboardCodexLifecycleStub(t, dir, "")
         t.Setenv("DWS_CONFIG_DIR", state)
-        req := DashboardAgentRequest{Channel:"codex",ConversationID:"conversation",ScopeID:"dashboard-codex-v2-stable",LegacyScopeID:"dashboard-old-exact",Text:"current request",WorkDir:dir,StateDir:state,TimeoutSeconds:10,Model:"new-model",ReasoningEffort:"low",SessionTitle:"项目打包助手",FullPermission:true,AuthorizedDirectories:[]string{dir}}
-        legacy := codexThreadStorePath("dashboard-old-other-project-policy-v1")
-        newCodexThreadSessions(legacy).setThreadID(req.ConversationID,"thr_other")
-        newCodexThreadSessions(codexThreadStorePath("dashboard-other-route-project-policy-v1")).setThreadID("other-conversation","thr_unrelated")
-        expected := "thr_other"
-        if mode == "exact" {
-            exactPath := codexThreadStorePath(req.LegacyScopeID+"-project-policy-v1")
-            newCodexThreadSessions(exactPath).setThreadID(req.ConversationID,"thr_exact")
-            os.Chtimes(exactPath,time.Unix(1,0),time.Unix(1,0))
-            expected = "thr_exact"
-        }
+        req := DashboardAgentRequest{Channel:"codex",CodexHome:t.TempDir(),ConversationID:"conversation",ScopeID:"dashboard-codex-v3-stable",Text:"current request",WorkDir:dir,StateDir:state,TimeoutSeconds:10,Model:"new-model",ReasoningEffort:"low",SessionTitle:"项目打包助手",FullPermission:true,AuthorizedDirectories:[]string{dir}}
+        expected := "thr_existing"
+        newCodexThreadSessions(codexThreadStorePath(req.ScopeID)).setThreadID(req.ConversationID,expected)
         result, err := RunDashboardAgentWithStatus(context.Background(), req)
         if err != nil || result.SessionAction != "resumed" || result.SessionTitleFailed { t.Fatalf("%+v %v",result,err) }
-        path := codexThreadStorePath(req.ScopeID+"-project-policy-v1")
-        if got := newCodexThreadSessions(path).threadID(req.ConversationID); got != expected { t.Fatalf("adopted %q want %q",got,expected) }
+        path := codexThreadStorePath(req.ScopeID)
+        if got := newCodexThreadSessions(path).threadID(req.ConversationID); got != expected { t.Fatalf("bound %q want %q",got,expected) }
         bytes, _ := os.ReadFile(log)
-        if strings.Contains(string(bytes), `"method":"thread/start"`) { t.Fatal("upgrade created a new session") }
+        if strings.Contains(string(bytes), `"method":"thread/start"`) { t.Fatal("created a new session instead of resuming") }
         for _, line := range strings.Split(strings.TrimSpace(string(bytes)),"\n") {
             var call struct {Method string `json:"method"`; Params map[string]any `json:"params"`}
             if err := json.Unmarshal([]byte(line),&call); err != nil {t.Fatal(err)}
@@ -145,7 +141,7 @@ func TestDashboardBridgeAdoptsLegacyBindingAndKeepsCurrentSettings(t *testing.T)
                 if call.Params["threadId"]!=expected || call.Params["name"]!=req.SessionTitle { t.Fatal("title was not applied to bound thread") }
             }
         }
-        req.Model="next-model"; req.ReasoningEffort="max"; req.FullPermission=false; req.TimeoutSeconds=20; req.SessionTitle="新名称"; req.LegacyScopeID="dashboard-old-new-settings"
+        req.Model="next-model"; req.ReasoningEffort="max"; req.FullPermission=false; req.TimeoutSeconds=20; req.SessionTitle="新名称"
         again, err := RunDashboardAgentWithStatus(context.Background(),req)
         if err!=nil || again.SessionReference!=result.SessionReference {t.Fatalf("settings change split session: %+v %v",again,err)}
         bytes, _ = os.ReadFile(log)
@@ -163,14 +159,13 @@ func TestDashboardBridgeAdoptsLegacyBindingAndKeepsCurrentSettings(t *testing.T)
         overrides,_:=lastResume["config"].(map[string]any)
         roots,_:=overrides["sandbox_workspace_write.writable_roots"].([]any)
         if lastResume["model"]!="engine-default" || overrides["model_reasoning_effort"]!="medium" || len(roots)!=0 || lastResume["sandbox"]!="read-only" {t.Fatal("resume retained stale settings")}
-    }) }
 }
 
 func TestDashboardBridgeTitleFailureDoesNotReplayOrLoseAnswer(t *testing.T) {
     clearChannelEnv(t)
     dir, state := t.TempDir(), t.TempDir()
     log := dashboardCodexLifecycleStub(t,dir,"name_failed")
-    req:=DashboardAgentRequest{Channel:"codex",ConversationID:"c",ScopeID:"s",Text:"hello",WorkDir:dir,StateDir:state,TimeoutSeconds:10,SessionTitle:"自定义名称"}
+    req:=DashboardAgentRequest{Channel:"codex",CodexHome:t.TempDir(),ConversationID:"c",ScopeID:"s",Text:"hello",WorkDir:dir,StateDir:state,TimeoutSeconds:10,SessionTitle:"自定义名称"}
     result, err:=RunDashboardAgentWithStatus(context.Background(),req)
     if err!=nil || result.Answer!="recovered answer" || !result.SessionTitleFailed {t.Fatalf("%+v %v",result,err)}
     bytes,_:=os.ReadFile(log)
@@ -182,6 +177,8 @@ func TestDashboardBridgeDiagnosticsUseSafeCategories(t *testing.T) {
         {context.DeadlineExceeded,"engine_timeout"},
         {context.Canceled,"cancelled"},
         {errDashboardSessionStorage,"session_storage_failed"},
+        {errDashboardCodexStorage,"session_storage_unavailable"},
+        {errDashboardSessionBusy,"session_busy"},
         {errCodexEmployeeResumeFailed,"session_resume_failed"},
         {errors.New("Unauthorized secret-do-not-expose"),"authentication_required"},
         {errors.New("workdir unavailable"),"directory_unavailable"},
@@ -196,7 +193,7 @@ func TestDashboardBridgeStopsBeforeTurnWhenBindingCannotPersist(t *testing.T) {
     dir, state := t.TempDir(), t.TempDir()
     log := dashboardCodexLifecycleStub(t,dir,"")
     if err:=os.WriteFile(filepath.Join(state,"connect"),[]byte("blocked fixture"),0600); err!=nil {t.Fatal(err)}
-    req:=DashboardAgentRequest{Channel:"codex",ConversationID:"c",ScopeID:"s",Text:"hello",WorkDir:dir,StateDir:state,TimeoutSeconds:10}
+    req:=DashboardAgentRequest{Channel:"codex",CodexHome:t.TempDir(),ConversationID:"c",ScopeID:"s",Text:"hello",WorkDir:dir,StateDir:state,TimeoutSeconds:10}
     _, err:=RunDashboardAgentWithStatus(context.Background(),req)
     if !errors.Is(err,errDashboardSessionStorage) {t.Fatalf("expected storage failure: %v",err)}
     bytes,_:=os.ReadFile(log)
@@ -230,7 +227,7 @@ done
 `)
     t.Setenv("PATH", dir+":/usr/bin:/bin")
     extra := filepath.Join(dir, `notes "中文"`); if err := os.Mkdir(extra, 0700); err != nil { t.Fatal(err) }
-    req := DashboardAgentRequest{AdditionalDirectories: []string{dir, extra}, Channel: "codex", Model: "fixture-model", ConversationID: "group-a", ScopeID: "scope-a", Text: "hello", WorkDir: dir, StateDir: t.TempDir(), TimeoutSeconds: 10, ReasoningEffort: "low"}
+    req := DashboardAgentRequest{AdditionalDirectories: []string{dir, extra}, Channel: "codex", CodexHome: t.TempDir(), Model: "fixture-model", ConversationID: "group-a", ScopeID: "scope-a", Text: "hello", WorkDir: dir, StateDir: t.TempDir(), TimeoutSeconds: 10, ReasoningEffort: "low"}
     req.AuthorizedDirectories = []string{dir, extra}
     rules := []map[string]string{{"name":"项目打包","content":"收到打包请求时执行授权目录里的 scripts/build.sh"}}
     for i:=0; i<150; i++ { rules = append(rules, map[string]string{"name":"回复约定", "content":strings.Repeat("内容", 100)}) }
@@ -238,7 +235,7 @@ done
     customRules := string(ruleJSON)
     req.CustomRules = customRules
     t.Setenv("DWS_CONFIG_DIR", req.StateDir)
-    newCodexThreadSessions(codexThreadStorePath(req.ScopeID)).setThreadID(req.ConversationID, "legacy_attachment_only_thread")
+    newCodexThreadSessions(codexThreadStorePath("dashboard-codex-v2-"+req.ScopeID+"-project-policy-v1")).setThreadID(req.ConversationID, "legacy_attachment_only_thread")
     req.ImagePaths = []string{dashboardTestImage(t, req.StateDir)}
     for i:=0; i<2; i++ {
         answer, err := RunDashboardAgent(context.Background(), req)
@@ -305,11 +302,11 @@ func TestDashboardBridgeOfficialQoderParser(t *testing.T) {
 }
 
 func TestDashboardBridgeRejectsAPIGeminiAndInvalidRequests(t *testing.T) {
-    for _, req:=range []DashboardAgentRequest{{Channel:"gemini"},{Channel:"codex"},{Channel:"codex",ReasoningEffort:"invalid"},{Channel:"qoder",ReasoningEffort:"low"}} {
+    for _, req:=range []DashboardAgentRequest{{Channel:"gemini"},{Channel:"codex"},{Channel:"codex",CodexHome:t.TempDir(),ReasoningEffort:"invalid"},{Channel:"qoder",ReasoningEffort:"low"}} {
         if _,err:=RunDashboardAgent(context.Background(),req);err==nil {t.Fatal("expected validation error before any real engine launch")}
     }
     for _, rules := range []string{"not-json", "null", "[]", `[{"name":"", "content":"missing name"}]`, strings.Repeat(" ", 4*1024*1024+1)} {
-        req := DashboardAgentRequest{Channel:"codex",ConversationID:"c",ScopeID:"s",Text:"hello",CustomRules:rules}
+        req := DashboardAgentRequest{Channel:"codex",CodexHome:t.TempDir(),ConversationID:"c",ScopeID:"s",Text:"hello",CustomRules:rules}
         if _, err := RunDashboardAgent(context.Background(), req); err == nil || !strings.Contains(err.Error(), "rule") { t.Fatalf("invalid rules reached engine setup: %v", err) }
     }
 }

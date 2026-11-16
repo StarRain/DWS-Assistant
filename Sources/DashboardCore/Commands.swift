@@ -118,10 +118,8 @@ public enum Commands {
         // Only effective instructions affect memory. Editing a disabled rule or
         // regenerating its local UI identifier must not reset an engine session.
         let fingerprint = String(decoding: try encoder.encode(sessionSettings), as: UTF8.self) + (rules.isEmpty ? "" : "|rules-v1:" + rules)
-        let legacyScope = "dashboard-" + Digest.sha256(route + fingerprint)
-        // Codex applies current settings on resume. Keep one binding per route;
-        // the previous settings-derived scope is used only for one-time adoption.
-        let scope = settings.engine == .codex ? "dashboard-codex-v2-" + Digest.sha256(route) : legacyScope
+        // Codex keeps one binding per route in the assistant's private store.
+        let scope = settings.engine == .codex ? CodexHistory.scope(route: route) : "dashboard-" + Digest.sha256(route + fingerprint)
         let text = settings.engine == .codex ? prompt : try AgentRules.prompt(prompt, rules: settings.rules)
         var payload: [String: Any] = ["channel": settings.engine.channel, "conversation_id": Digest.sha256(route), "scope_id": scope, "text": text,
             "model": settings.model, "workdir": settings.workdir, "additional_directories": settings.additionalDirectories, "state_dir": stateDirectory,
@@ -130,8 +128,8 @@ public enum Commands {
             "reasoning_effort": settings.reasoningEffort.rawValue]
         if settings.engine == .codex && !rules.isEmpty { payload["custom_rules"] = rules }
         if settings.engine == .codex {
+            payload["codex_home"] = CodexHistory.home(stateDirectory: URL(fileURLWithPath: stateDirectory, isDirectory: true)).path
             if reportProgress { payload["report_progress"] = true }
-            payload["legacy_scope_id"] = legacyScope
             let customTitle = settings.sessionTitle.trimmingCharacters(in: .whitespacesAndNewlines)
             payload["session_title"] = customTitle.isEmpty ? String(sessionTitle.prefix(120)) : customTitle
         }
@@ -145,6 +143,8 @@ public enum Commands {
             let message: String
             switch obj?["reason"] as? String {
             case "session_resume_failed": message = "历史会话恢复失败，未执行本次请求"
+            case "session_busy": message = "历史会话正被其他 Codex 客户端占用，未执行本次请求；请释放该会话后重试"
+            case "session_storage_unavailable": message = "无法准备 Codex 专用会话目录，未执行本次请求，请检查本地数据目录"
             case "session_storage_failed": message = "会话绑定保存失败，未执行本次请求，请检查本地数据目录"
             case "engine_settings_failed": message = "无法读取当前引擎设置，未执行本次请求"
             case "engine_timeout": message = "执行超时，已停止本次请求"
