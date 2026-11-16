@@ -10,6 +10,8 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/Resources/
 chmod -R u+w "$app/Contents/Resources/Licenses"
 cp .build/release/DWSDashboard "$app/Contents/MacOS/DWSDashboard"
 cp .build/bridge/dws-dashboard-bridge "$app/Contents/Helpers/dws-dashboard-bridge"
+cp LICENSE "$app/Contents/Resources/Licenses/DWS-Dashboard-LICENSE.txt"
+cp NOTICE "$app/Contents/Resources/Licenses/DWS-Dashboard-NOTICE.txt"
 cp .build/vendor/dws/LICENSE "$app/Contents/Resources/Licenses/DWS-Apache-2.0.txt"
 cp .build/vendor/dws/NOTICE "$app/Contents/Resources/Licenses/DWS-NOTICE.txt"
 cp -R .build/bridge/Licenses/. "$app/Contents/Resources/Licenses/"
