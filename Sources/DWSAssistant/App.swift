@@ -87,21 +87,16 @@ struct DashboardApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var model: DashboardModel?
     let windowLifecycle = DashboardWindowLifecycle()
-    private var terminating = false
+    private let termination = DashboardTermination()
     func applicationDidFinishLaunching(_ notification: Notification) { NSApp.applicationIconImage = DashboardBrand.appIcon }
     func applicationDidBecomeActive(_ notification: Notification) {
         Task { await model?.refreshAccounts() }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard !terminating, let model, model.hasActiveWork else { return .terminateNow }
-        terminating = true
-        Task {
-            let success = await model.stopAll()
-            terminating = false
-            sender.reply(toApplicationShouldTerminate: success)
-        }
-        return .terminateLater
+        termination.request(hasActiveWork: model?.hasActiveWork == true,
+                            stop: { [model] in await model?.stopAll() ?? true },
+                            terminate: { sender.terminate(nil) })
     }
     func requestQuit() { NSApplication.shared.terminate(nil) }
 }
