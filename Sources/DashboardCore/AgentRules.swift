@@ -22,6 +22,10 @@ public enum AgentRules {
         public let content: String
     }
 
+    public static func cloned(_ rules: [AgentRule]) -> [AgentRule] {
+        rules.map { AgentRule(name: $0.name, content: $0.content, enabled: $0.enabled) }
+    }
+
     public static func active(_ rules: [AgentRule]) -> [Instruction] {
         rules.filter(\.enabled).map {
             Instruction(name: $0.name.trimmingCharacters(in: .whitespacesAndNewlines),

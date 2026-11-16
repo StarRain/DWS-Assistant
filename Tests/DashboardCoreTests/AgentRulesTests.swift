@@ -2,6 +2,23 @@ import XCTest
 @testable import DashboardCore
 
 final class AgentRulesTests: XCTestCase {
+    func testClonedRulesKeepSettingsAndHaveIndependentIdentities() throws {
+        let source = [AgentRule(name: "回复风格", content: "先给结论，再说明。"),
+                      AgentRule(name: "项目打包", content: "按已授权的项目脚本构建。", enabled: false)]
+        var first = AgentRules.cloned(source)
+        let second = AgentRules.cloned(source)
+        XCTAssertEqual(first.map(\.name), source.map(\.name))
+        XCTAssertEqual(first.map(\.content), source.map(\.content))
+        XCTAssertEqual(first.map(\.enabled), [true, false])
+        XCTAssertEqual(Set((source + first + second).map(\.id)).count, 6)
+        XCTAssertNoThrow(try AgentRules.validate(first + second))
+        first[0].content = "仅返回简短结论。"
+        first[1].enabled = true
+        XCTAssertEqual(source[0].content, "先给结论，再说明。")
+        XCTAssertFalse(source[1].enabled)
+        XCTAssertEqual(second[0].content, source[0].content)
+    }
+
     private func workspace() throws -> URL {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("dashboard-rules-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

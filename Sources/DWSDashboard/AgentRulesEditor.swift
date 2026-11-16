@@ -6,10 +6,12 @@ struct AgentRulesEditor: View {
     @State private var rules: [AgentRule]
     @State private var error: String?
     @State private var editingRule: AgentRule?
+    @State private var showingClone = false
+    private let sources: [Conversation]
     private let apply: ([AgentRule]) -> Void
 
-    init(rules: [AgentRule], apply: @escaping ([AgentRule]) -> Void) {
-        _rules = State(initialValue: rules); self.apply = apply
+    init(rules: [AgentRule], sources: [Conversation], apply: @escaping ([AgentRule]) -> Void) {
+        _rules = State(initialValue: rules); self.sources = sources; self.apply = apply
     }
 
     var body: some View {
@@ -18,6 +20,9 @@ struct AgentRulesEditor: View {
                 HStack {
                     Text("自定义规则").font(.title2.bold())
                     Spacer()
+                    Button("从其他会话克隆") { showingClone = true }
+                        .disabled(sources.isEmpty)
+                        .help(sources.isEmpty ? "其他会话还没有可克隆的规则" : "选择其他会话的规则，复制到当前会话")
                     Button("添加规则", action: addRule)
                 }
                 Text("为当前会话约定回复方式或任务步骤，AI 会按请求使用已开启的规则。")
@@ -29,7 +34,7 @@ struct AgentRulesEditor: View {
                     Image(systemName: "text.alignleft").font(.system(size: 28)).foregroundStyle(DashboardTheme.accent)
                         .padding(18).background(DashboardTheme.subtle, in: RoundedRectangle(cornerRadius: 16))
                     Text("还没有自定义规则").font(.headline)
-                    Text("例如：收到“打包”请求时，执行授权项目中的指定脚本。")
+                    Text("添加回复要求或任务步骤，让 AI 按你的约定处理消息。")
                         .font(.caption).foregroundStyle(DashboardTheme.muted)
                     Button("添加第一条规则", action: addRule).buttonStyle(.borderedProminent).padding(.top, 4)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -70,6 +75,9 @@ struct AgentRulesEditor: View {
                 if let index = rules.firstIndex(where: { $0.id == saved.id }) { rules[index] = saved }
                 else { rules.append(saved) }
             }
+        }
+        .sheet(isPresented: $showingClone) {
+            AgentRuleCloner(sources: sources) { rules.append(contentsOf: $0) }
         }
     }
 
@@ -130,7 +138,7 @@ struct AgentRuleEditor: View {
             }
             VStack(alignment: .leading, spacing: 10) {
                 Text("规则名称").font(.headline)
-                TextField("例如：项目打包", text: $value.name)
+                TextField("为规则命名，例如：回复风格", text: $value.name)
                     .textFieldStyle(.roundedBorder).accessibilityLabel("规则名称")
             }
             VStack(alignment: .leading, spacing: 10) {
@@ -143,11 +151,11 @@ struct AgentRuleEditor: View {
                 }
                 ZStack(alignment: .topLeading) {
                     if value.content.isEmpty {
-                        Text("例如：当我说“打包”时，进入已授权的项目目录，执行 scripts/build.sh，并回复执行结果。")
+                        Text("描述这条规则的适用场景、回复要求或任务步骤。\n例如：回答时先给结论，再分点说明；信息不完整时先询问。")
                             .foregroundStyle(DashboardTheme.muted).padding(.horizontal, 5).padding(.vertical, 8)
                             .allowsHitTesting(false)
                     }
-                    TextEditor(text: $value.content).scrollContentBackground(.hidden)
+                    RuleContentEditor(text: $value.content)
                         .padding(.vertical, 4).accessibilityLabel("规则内容")
                 }
                 .font(.body).frame(minHeight: 180).padding(8)

@@ -89,7 +89,7 @@ struct ConversationEditor: View {
                     }
                 }
                 if value.listen && value.autoReply {
-                    AgentFields(value: $value.agent, defaultSessionTitle: value.defaultCodexSessionTitle)
+                    AgentFields(value: $value.agent, defaultSessionTitle: value.defaultCodexSessionTitle, conversationID: value.id)
                 }
                 }.padding(20)
             }.toggleStyle(.switch).background(DashboardTheme.background).disabled(saving)

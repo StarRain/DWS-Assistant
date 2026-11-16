@@ -6,6 +6,7 @@ struct AgentFields: View {
     @EnvironmentObject var model: DashboardModel
     @Binding var value: AgentSettings
     var defaultSessionTitle = "DWS 会话"
+    var conversationID: UUID?
     @State private var metadata = EngineMetadata()
     @State private var loading = false
     @State private var metadataError: String?
@@ -152,7 +153,7 @@ struct AgentFields: View {
             }
         }
         .sheet(isPresented: $showingRules) {
-            AgentRulesEditor(rules: value.rules) { value.rules = $0 }
+            AgentRulesEditor(rules: value.rules, sources: model.conversations.filter { $0.id != conversationID && !$0.agent.rules.isEmpty }) { value.rules = $0 }
         }
     }
     private func loadMetadata() async {
