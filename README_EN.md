@@ -80,6 +80,18 @@ DWS handles authorization, messages and reactions. DWS Assistant manages chat se
 
 ## Installation
 
+### Download the DMG
+
+Download **DWS-Assistant-1.0.0-arm64.dmg** from [GitHub Releases](https://github.com/StarRain/DWS-Assistant/releases/latest). This package requires **Apple Silicon (M-series chips) and macOS 14 or later**.
+
+Open the DMG, drag **DWS Assistant.app** to **Applications**, then launch it from Applications. DWS CLI and an AI engine must still be installed and signed in to separately.
+
+This release is ad hoc signed and has not been notarized by Apple. If macOS blocks the first launch, use **System Settings → Privacy & Security → Open Anyway** for this download. The release also includes a `.sha256` checksum file. Download both files to the same directory and verify them with:
+
+```sh
+shasum -a 256 -c DWS-Assistant-1.0.0-arm64.dmg.sha256
+```
+
 ### Requirements
 
 - macOS 14 or later. The current build has been verified on Apple Silicon.
@@ -89,7 +101,7 @@ DWS handles authorization, messages and reactions. DWS Assistant manages chat se
 
 ### Build from source
 
-The current distribution method is a source build:
+You can also build from source:
 
 ```sh
 git clone https://github.com/StarRain/DWS-Assistant.git
@@ -100,6 +112,8 @@ bash scripts/build-app.sh
 The first build downloads and verifies the pinned DWS source and dependencies. Go is discovered through `PATH` or `.build/toolchain/go/bin/go`; set `DWS_ASSISTANT_GO` to use a specific executable.
 
 The output is `dist/DWS Assistant.app`. Copy it to Applications and open it. The build script bundles the AI adapter helper, icons, language resources and licenses, then applies an ad hoc signature. The app is currently not notarized by Apple.
+
+Run `bash scripts/build-dmg.sh` to build the app and create a DMG for the current architecture, along with a SHA-256 checksum file, in `dist/`. Add `--skip-build` to package an app that has already been built.
 
 ## Usage
 

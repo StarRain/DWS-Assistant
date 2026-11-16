@@ -80,6 +80,18 @@ DWS 负责授权、消息收发和表情操作。DWS助手管理会话配置与�
 
 ## 安装
 
+### 下载 DMG
+
+从 [GitHub Releases](https://github.com/StarRain/DWS-Assistant/releases/latest) 下载 **DWS-Assistant-1.0.0-arm64.dmg**。当前安装包适用于 **Apple Silicon（M 系列芯片）和 macOS 14 或更高版本**。
+
+打开 DMG，将 **DWS Assistant.app** 拖入 **Applications**，再从“应用程序”文件夹启动。DWS CLI 和 AI 引擎仍需单独安装并登录。
+
+此版本使用 ad hoc 签名，尚未经过 Apple 公证。首次打开若被 macOS 拦截，可在「系统设置 → 隐私与安全性」中对本次下载选择「仍要打开」。发布页同时提供 `.sha256` 校验文件，下载到同一目录后可验证：
+
+```sh
+shasum -a 256 -c DWS-Assistant-1.0.0-arm64.dmg.sha256
+```
+
 ### 环境要求
 
 - macOS 14 或更高版本，当前构建已在 Apple Silicon 上验证。
@@ -89,7 +101,7 @@ DWS 负责授权、消息收发和表情操作。DWS助手管理会话配置与�
 
 ### 从源码构建
 
-当前提供源码构建方式：
+也可从源码构建：
 
 ```sh
 git clone https://github.com/StarRain/DWS-Assistant.git
@@ -100,6 +112,8 @@ bash scripts/build-app.sh
 首次构建会下载并校验固定版本的 DWS 源码及依赖。Go 默认从 `PATH` 或 `.build/toolchain/go/bin/go` 查找，也可通过 `DWS_ASSISTANT_GO` 指定路径。
 
 构建产物为 `dist/DWS Assistant.app`，可复制到“应用程序”文件夹后打开。构建脚本会打包 AI 适配 helper、图标、语言资源和许可证，并执行 ad hoc 签名；当前未进行 Apple 公证。
+
+执行 `bash scripts/build-dmg.sh` 可构建应用并生成当前架构的 DMG 与 SHA-256 校验文件，输出到 `dist/`。若应用已构建完成，可加 `--skip-build` 仅打包。
 
 ## 使用
 
