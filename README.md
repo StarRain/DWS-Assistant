@@ -1,12 +1,14 @@
 <p align="center">
-  <img src="Assets/Brand/DWS-Dashboard.svg" width="112" alt="DWS Dashboard 图标">
+  <img src="Assets/Brand/DWS-Assistant.svg" width="112" alt="DWS Assistant 图标">
 </p>
 
-<h1 align="center">DWS Dashboard</h1>
+<h1 align="center">DWS Assistant</h1>
 
-<p align="center">在 macOS 上管理你的钉钉 AI 助手。</p>
+<p align="center">在 macOS 上管理你的 DWS助手。</p>
 
-<p align="center"><a href="#安装">安装与构建</a> · <a href="docs/CONFIGURATION.md">配置说明</a> · <a href="https://github.com/StarRain/DWS-Dashboard/issues">问题反馈</a></p>
+<p align="center"><strong>简体中文</strong> · <a href="README_EN.md">English</a></p>
+
+<p align="center"><a href="#安装">安装与构建</a> · <a href="docs/CONFIGURATION.md">配置说明</a> · <a href="https://github.com/StarRain/DWS-Assistant/issues">问题反馈</a></p>
 
 <p align="center">
   <img alt="Version" src="https://img.shields.io/badge/version-v1.0.0-456bf4">
@@ -15,13 +17,13 @@
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-456bf4"></a>
 </p>
 
-DWS Dashboard 是一个原生 macOS 应用，通过 [DingTalk Workspace CLI（DWS）](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli) 连接钉钉，使用本机 AI 引擎处理消息，并以你的账号在原会话中回复。应用提供主面板、菜单栏和独立快捷面板。
+DWS Assistant（DWS助手）是一个原生 macOS 应用，通过 [DingTalk Workspace CLI（DWS）](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli) 连接钉钉，使用本机 AI 引擎处理消息，并以你的账号在原会话中回复。应用提供主面板、菜单栏和独立快捷面板。
 
-> 当前版本仅使用一个已登录的钉钉账号，支持群聊和私聊。登录成功后，由你手动开启 AI 助手服务。
+> 当前版本仅使用一个已登录的钉钉账号，支持群聊和私聊。登录成功后，由你手动开启 DWS助手服务。
 
 ## 界面预览
 
-![DWS Dashboard 主面板](docs/assets/dashboard-dark.jpg)
+![DWS Assistant 主面板](docs/assets/dashboard-dark.svg)
 
 截图来自预览模式，账号、会话和统计均为模拟数据。
 
@@ -54,10 +56,13 @@ DWS Dashboard 是一个原生 macOS 应用，通过 [DingTalk Workspace CLI（DW
 
 ### macOS 体验
 
+- 支持简体中文与 English，默认简体中文；可在「设置 → 界面语言」或登录页立即切换。
 - 支持浅色、深色与跟随系统，界面使用统一矢量图标。
 - 菜单栏和快捷面板可控制助手、查看统计与最近动态。
 - 关闭主窗口后隐藏程序坞图标，保留菜单栏及正在运行的服务。
 - 可设置登录 macOS 时启动；应用启动不会自动开启监听。
+
+界面语言不会更改账号和会话名称、自定义规则、引擎设置、AI 回复语言或磁盘上的原始日志。DWS 与 AI 引擎的原始输出保留其自身语言。
 
 ## 工作方式
 
@@ -69,7 +74,7 @@ DWS Dashboard 是一个原生 macOS 应用，通过 [DingTalk Workspace CLI（DW
   → DWS 以当前账号回复原会话
 ```
 
-DWS 负责授权、消息收发和表情操作。Dashboard 管理会话配置与任务状态，复用固定版本 DWS 的本地 AI 适配器；Gemini 使用本机 CLI 适配。面板不会移动工具的安装目录，也不会修改引擎的全局配置。
+DWS 负责授权、消息收发和表情操作。DWS助手管理会话配置与任务状态，复用固定版本 DWS 的本地 AI 适配器；Gemini 使用本机 CLI 适配。面板不会移动工具的安装目录，也不会修改引擎的全局配置。
 
 ## 安装
 
@@ -85,14 +90,14 @@ DWS 负责授权、消息收发和表情操作。Dashboard 管理会话配置与
 当前提供源码构建方式：
 
 ```sh
-git clone https://github.com/StarRain/DWS-Dashboard.git
-cd DWS-Dashboard
+git clone https://github.com/StarRain/DWS-Assistant.git
+cd DWS-Assistant
 bash scripts/build-app.sh
 ```
 
-首次构建会下载并校验固定版本的 DWS 源码及依赖。Go 默认从 `PATH` 或 `.build/toolchain/go/bin/go` 查找，也可通过 `DWS_DASHBOARD_GO` 指定路径。
+首次构建会下载并校验固定版本的 DWS 源码及依赖。Go 默认从 `PATH` 或 `.build/toolchain/go/bin/go` 查找，也可通过 `DWS_ASSISTANT_GO` 指定路径。
 
-构建产物为 `dist/DWS Dashboard.app`，可复制到“应用程序”文件夹后打开。构建脚本会打包 AI 适配 helper、图标和许可证，并执行 ad hoc 签名；当前未进行 Apple 公证。
+构建产物为 `dist/DWS Assistant.app`，可复制到“应用程序”文件夹后打开。构建脚本会打包 AI 适配 helper、图标、语言资源和许可证，并执行 ad hoc 签名；当前未进行 Apple 公证。
 
 ## 使用
 
@@ -100,7 +105,7 @@ bash scripts/build-app.sh
 2. 进入「群聊」或「私聊」，点击「添加群聊」或「添加联系人」，搜索并选择会话。
 3. 开启会话监听与自动回复，选择触发方式、回复形式和 AI 引擎。需要读取项目时，再添加授权目录。
 4. 如需约定回复风格或任务步骤，在「AI 回复设置 → 自定义规则」中添加规则，完成后保存会话配置。
-5. 打开左下角「AI 助手服务」。关闭主窗口可继续通过菜单栏使用；「关闭助手并退出」会停止服务。
+5. 打开左下角「DWS助手服务」。关闭主窗口可继续通过菜单栏使用；「关闭助手并退出」会停止服务。
 
 群聊触发方式：
 
@@ -135,6 +140,7 @@ bash scripts/build-app.sh
 
 ## 数据与权限
 
+- 应用名称为 DWS Assistant（DWS助手），Bundle ID 为 `com.starrain.dwsassistant`；更名后继续沿用已有数据目录。
 - 面板数据保存在 `~/.dws-dashboard`，包括配置、状态日志、投递记录与引擎会话映射。
 - DWS 和 AI 引擎沿用各自的登录状态；面板不迁移它们的凭据。
 - 授权目录默认为空，添加目录不会自动提高执行权限。目录列表不构成完整的文件读取沙箱，实际访问范围由引擎权限决定。
@@ -158,19 +164,19 @@ bash scripts/build-app.sh
 独立预览使用模拟账号与会话，不启动真实监听或 AI 任务：
 
 ```sh
-open -n "dist/DWS Dashboard.app" --args --preview --data-dir /tmp/dws-dashboard-preview
+open -n "dist/DWS Assistant.app" --args --preview --data-dir /tmp/dws-assistant-preview
 ```
 
 ```text
 Sources/DashboardCore       配置、命令、事件路由与持久化
-Sources/DWSDashboard        SwiftUI 界面与任务协调
+Sources/DWSAssistant        SwiftUI 界面与任务协调
 Integrations/DWSBridge      DWS 官方 AI 适配器包装与测试
 Tests                      Swift 回归测试
 Assets                     品牌与界面矢量素材
 scripts                    构建、图标生成与许可证收集
 ```
 
-测试使用临时目录与模拟 CLI，覆盖消息路由、防循环、会话恢复、配置变更、图片缓存和交互卡片。自动化测试不向真实钉钉会话发送消息。
+测试使用临时目录与模拟 CLI，覆盖消息路由、防循环、会话恢复、配置变更、图片缓存、交互卡片和语言切换。自动化测试不向真实钉钉会话发送消息。
 
 ## 相关项目
 
@@ -179,7 +185,7 @@ scripts                    构建、图标生成与许可证收集
 
 ## 参与贡献
 
-欢迎通过 [Issues](https://github.com/StarRain/DWS-Dashboard/issues) 反馈问题或建议，也可提交 Pull Request。
+欢迎通过 [Issues](https://github.com/StarRain/DWS-Assistant/issues) 反馈问题或建议，也可提交 Pull Request。
 
 问题反馈请附上 macOS 版本、DWS 与 AI 引擎版本、复现步骤和脱敏日志。提交前运行与改动相关的测试；Git 提交标题使用 `type(scope): summary`，例如 `fix(cards): 修复取消后的卡片状态`。
 
@@ -191,4 +197,4 @@ scripts                    构建、图标生成与许可证收集
 
 ## 说明
 
-DWS Dashboard 是独立社区项目，并非钉钉官方产品。DingTalk、Codex、Claude、Qoder、Gemini 等名称和商标归各自权利人所有。
+DWS Assistant 是独立社区项目，并非钉钉官方产品。DingTalk、Codex、Claude、Qoder、Gemini 等名称和商标归各自权利人所有。
