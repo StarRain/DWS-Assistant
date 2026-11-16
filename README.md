@@ -39,7 +39,7 @@ DWS Assistant（DWS助手）是一个原生 macOS 应用，通过 [DingTalk Work
 
 ### AI 回复与交互
 
-- 支持 **Codex、Claude Code、Qoder、Gemini**，使用用户已安装并登录的 CLI。
+- 支持 **Codex、Claude Code、Qoder、QoderWork、OpenCode、WorkBuddy、CodeBuddy、Gemini、Pi** 和 **自定义 Agent（custom）**。内置渠道使用已有安装与登录状态，自定义 Agent 可接入本地模型。
 - 每个会话独立选择引擎、模型、思考强度与执行权限；支持从引擎读取可用选项。
 - 支持普通文本、Markdown 和 AI 卡片。卡片先显示处理状态，再更新同一卡片的结果。
 - 交互卡片支持确认、取消、单选、多选和文字输入，默认等待 **60 秒**，可配置超时。
@@ -72,7 +72,7 @@ DWS Assistant（DWS助手）是一个原生 macOS 应用，通过 [DingTalk Work
 钉钉群聊 / 私聊
   → DWS 官方事件订阅
   → 会话配置、触发判断与回复去重
-  → 本机 AI 引擎（Codex / Claude Code / Qoder / Gemini）
+  → 本机 AI 引擎（内置渠道 / 自定义 Agent）
   → DWS 以当前账号回复原会话
 ```
 
@@ -96,7 +96,7 @@ shasum -a 256 -c DWS-Assistant-1.0.0-arm64.dmg.sha256
 
 - macOS 14 或更高版本，当前构建已在 Apple Silicon 上验证。
 - 已安装 [DWS CLI](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli#installation)。
-- 自动回复需要至少一个已安装并登录的 AI 引擎：Codex、Claude Code、Qoder 或 Gemini。
+- 自动回复需要一个已安装并登录的内置 AI 引擎，或可单次运行并输出回复的自定义 Agent。各渠道配置见 [支持的渠道与启动命令](docs/CONFIGURATION.md#支持的渠道与启动命令)。
 - 从源码构建需要 Swift 6、Xcode 命令行工具、Go 1.26.7 或更新版本，以及 Python 3。
 
 ### 从源码构建

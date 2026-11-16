@@ -54,6 +54,7 @@ final class AgentRulesTests: XCTestCase {
         let content = "当我说“打包”时执行 scripts/build.sh；路径含空格、\"引号\"、$(printf unexpected)。\n返回结果。"
         for engine in Engine.allCases {
             var settings = AgentSettings(); settings.engine = engine
+            if engine == .custom { settings.agentCommand = "/bin/echo" }
             settings.authorizedDirectories = [directory.path]
             settings.rules = [AgentRule(name: "项目打包", content: content), AgentRule(name: "不启用", content: "disabled-sentinel", enabled: false)]
             let encoded = try AgentRules.encodedInstructions(settings.rules)
@@ -112,6 +113,7 @@ final class AgentRulesTests: XCTestCase {
         for permission in ExecutionPermission.allCases {
             for engine in Engine.allCases {
                 var settings = AgentSettings(); settings.engine = engine; settings.permission = permission
+                if engine == .custom { settings.agentCommand = "/bin/echo" }
                 settings.authorizedDirectories = [directory.path]
                 settings.rules = [AgentRule(name: "打包", content: "调用 scripts/publish.sh，提供帮助中的打包、上传、通知选项。")]
                 var config = DashboardConfig(); config.executablePaths["gemini"] = "/bin/echo"

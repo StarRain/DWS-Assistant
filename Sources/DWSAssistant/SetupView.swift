@@ -151,8 +151,8 @@ struct SetupView: DashboardLocalizedView {
                 Spacer(minLength: 8)
                 Text(l("\(model.installedEngines.count) 个已检测到")).font(.caption).foregroundStyle(DashboardTheme.secondary)
             }
-            HStack(spacing: 10) {
-                ForEach(Engine.allCases) { engine in
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 10) {
+                ForEach(Engine.installedCLIEngines) { engine in
                     let installed = model.installedEngines.contains(engine)
                     HStack(spacing: 6) {
                         Image(systemName: installed ? "checkmark.circle.fill" : "circle.dashed")
@@ -164,6 +164,8 @@ struct SetupView: DashboardLocalizedView {
                 }
             }
             Text(l("安装检测不代表已登录；使用前请在所选引擎中完成登录。"))
+                .font(.caption).foregroundStyle(DashboardTheme.secondary)
+            Text(l("自定义 Agent 可在会话配置中填写启动命令，无需安装上述引擎。"))
                 .font(.caption).foregroundStyle(DashboardTheme.secondary)
         }.padding(20).card()
     }

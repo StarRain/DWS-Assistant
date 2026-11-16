@@ -25,7 +25,7 @@ extension DashboardModel {
     func prepareExecutableAliases() throws {
         let bin = dataURL.appendingPathComponent("bin", isDirectory: true)
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        let names = Engine.allCases.map(\.executable)
+        let names = Engine.executableNames
         for name in names {
             guard let path = try? Executables.resolve(name, overrides: config.executablePaths) else { continue }
             let link = bin.appendingPathComponent(name)

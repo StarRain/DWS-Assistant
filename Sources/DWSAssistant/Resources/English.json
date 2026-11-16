@@ -438,5 +438,20 @@
   "请输入联系人姓名": "Enter a contact name",
   "预览模式不访问 DWS": "Preview mode does not access DWS",
   "DWS助手": "DWS Assistant",
-  "欢迎使用 DWS助手": "Welcome to DWS Assistant"
+  "欢迎使用 DWS助手": "Welcome to DWS Assistant",
+  "自定义 Agent": "Custom Agent",
+  "启动命令（--agent-cmd）": "Launch command (--agent-cmd)",
+  "例如：python3 /path/to/agent.py": "For example: python3 /path/to/agent.py",
+  "自定义 Agent 启动命令": "Custom Agent launch command",
+  "使用无头、单次执行命令。DWS 将消息追加为最后一个参数，并把标准输出作为回复。": "Use a headless, one-shot command. DWS appends the message as the last argument and uses stdout as the reply.",
+  "模型和权限请在启动命令或 Agent 自身配置中设置；也可使用本地模型。": "Set the model and permissions in the command or Agent configuration. Local models are supported.",
+  "工作目录（--agent-workdir）": "Working directory (--agent-workdir)",
+  "选择目录": "Choose directory",
+  "程序在此目录启动；留空使用独立工作目录。": "The Agent starts in this directory. Leave empty to use a dedicated working directory.",
+  "自定义 Agent 可在会话配置中填写启动命令，无需安装上述引擎。": "For a custom Agent, enter its launch command in chat settings. None of the engines above are required.",
+  "启动命令按 DWS 官方 agent-cmd 执行": "The launch command uses the official DWS agent-cmd adapter",
+  "使用 DWS 官方适配器；模型留空沿用渠道默认值": "Uses the official DWS adapter; leave the model empty for the channel default",
+  "请填写自定义 Agent 的启动命令": "Enter the custom Agent launch command",
+  "此引擎仅支持一个工作目录，请移除多余目录": "This engine supports one working directory. Remove the additional directories.",
+  "未检测到 {0}，请先安装并完成登录。": "{0} was not detected. Install it and sign in first."
 }

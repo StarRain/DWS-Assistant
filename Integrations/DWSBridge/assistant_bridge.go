@@ -25,6 +25,7 @@ import (
 
 type DashboardAgentRequest struct {
     Channel string `json:"channel"`
+    AgentCommand string `json:"agent_command"`
     ConversationID string `json:"conversation_id"`
     ScopeID string `json:"scope_id"`
     Text string `json:"text"`
@@ -44,6 +45,16 @@ type DashboardAgentRequest struct {
 }
 
 var dashboardAgentMu sync.Mutex
+
+// Reuse upstream installation checks without installing or starting any Agent.
+func DashboardAgentStatuses() map[string]map[string]any {
+    result := make(map[string]map[string]any)
+    for channel := range agentSpecs {
+        if channel == "gemini" || channel == "custom" { continue }
+        result[channel] = connectCliStatus(channel)
+    }
+    return result
+}
 
 func RunDashboardAgent(ctx context.Context, r DashboardAgentRequest) (string, error) {
     result, err := RunDashboardAgentWithStatus(ctx, r)
@@ -70,7 +81,9 @@ func runDashboardAgent(ctx context.Context, r DashboardAgentRequest, diagnostics
     // and upstream process hooks scoped when called repeatedly by integration tests.
     dashboardAgentMu.Lock()
     defer dashboardAgentMu.Unlock()
-    switch r.Channel { case "codex", "claudecode", "qoder": default: return "", errors.New("unsupported official CLI adapter") }
+    if _, ok := agentSpecs[r.Channel]; !ok || r.Channel == "gemini" { return "", errors.New("unsupported official CLI adapter") }
+    if r.Channel == "custom" && strings.TrimSpace(r.AgentCommand) == "" { return "", errors.New("custom agent command required") }
+    if r.Channel != "custom" && r.AgentCommand != "" { return "", errors.New("agent command belongs to custom channel") }
     switch r.ReasoningEffort { case "", "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra": default: return "", errors.New("invalid reasoning effort") }
     if r.Channel != "codex" && (r.ReasoningEffort == "none" || r.ReasoningEffort == "minimal" || r.ReasoningEffort == "ultra") { return "", errors.New("reasoning effort is not supported by this engine") }
     if r.ScopeID == "" || r.ConversationID == "" || len(r.Text) > 4*1024*1024+128*1024 || strings.TrimSpace(r.Text) == "" { return "", errors.New("invalid conversation request") }
@@ -119,7 +132,7 @@ func runDashboardAgent(ctx context.Context, r DashboardAgentRequest, diagnostics
             return original(ctx, name, args...)
         }
     }
-    if r.Channel == "qoder" {
+    if r.Channel == "qoder" || r.Channel == "qoderwork" {
         original := qoderExecCommand
         defer func() { qoderExecCommand = original }()
         qoderExecCommand = func(name string, args ...string) *exec.Cmd {
@@ -127,7 +140,7 @@ func runDashboardAgent(ctx context.Context, r DashboardAgentRequest, diagnostics
             return original(name, append(extra, args...)...)
         }
     }
-    opts := connectAgentOptions{Model: r.Model, WorkDir: r.WorkDir, Memory: true, Yolo: r.FullPermission, Timeout: time.Duration(r.TimeoutSeconds)*time.Second, PrivateDiagnostics: true}
+    opts := connectAgentOptions{Command: r.AgentCommand, Model: r.Model, WorkDir: r.WorkDir, Memory: true, Yolo: r.FullPermission, Timeout: time.Duration(r.TimeoutSeconds)*time.Second, PrivateDiagnostics: true}
     fwd, err := newLocalAgentForwarder(r.Channel, r.ScopeID, opts)
     if err != nil { return "", err }
     if f, ok := fwd.(*codexAppServerForwarder); ok {

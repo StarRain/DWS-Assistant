@@ -15,6 +15,7 @@ import (
 
 func main() {
     if len(os.Args) == 2 && os.Args[1] == "--version" { fmt.Println("DWS Dashboard bridge / dws v1.0.66 / f215043e676d6889e1ddce3464828d8b1ec40c31"); return }
+    if len(os.Args) == 2 && os.Args[1] == "--channels" { json.NewEncoder(os.Stdout).Encode(helpers.DashboardAgentStatuses()); return }
     ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
     defer cancel()
     var request helpers.DashboardAgentRequest

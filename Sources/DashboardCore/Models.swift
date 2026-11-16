@@ -1,13 +1,31 @@
 import Foundation
 
 public enum Engine: String, Codable, CaseIterable, Identifiable {
-    case codex, claude, qoder, gemini
+    case codex, claude, qoder, qoderwork, opencode, workbuddy, codebuddy, gemini, pi, custom
     public var id: String { rawValue }
     public var title: String {
-        switch self { case .codex: return "Codex"; case .claude: return "Claude Code"; case .qoder: return "Qoder"; case .gemini: return "Gemini" }
+        switch self {
+        case .codex: return "Codex"; case .claude: return "Claude Code"
+        case .qoder: return "Qoder"; case .qoderwork: return "QoderWork"
+        case .opencode: return "OpenCode"; case .workbuddy: return "WorkBuddy"
+        case .codebuddy: return "CodeBuddy"; case .gemini: return "Gemini"
+        case .pi: return "Pi"; case .custom: return "自定义 Agent"
+        }
     }
-    public var executable: String { self == .claude ? "claude" : self == .qoder ? "qodercli" : rawValue }
+    public var executable: String {
+        switch self {
+        case .claude: return "claude"
+        case .qoder, .qoderwork: return "qodercli"
+        case .workbuddy, .codebuddy: return "codebuddy"
+        default: return rawValue
+        }
+    }
     public var channel: String { self == .claude ? "claudecode" : rawValue }
+    public static var installedCLIEngines: [Engine] { allCases.filter { $0 != .custom } }
+    public static var executableNames: [String] { Array(Set(installedCLIEngines.map(\.executable))).sorted() }
+    public var usesBridge: Bool { self != .gemini }
+    public var supportsReasoning: Bool { [.codex, .claude, .qoder, .qoderwork].contains(self) }
+    public var supportsAdditionalDirectories: Bool { [.codex, .claude, .qoder, .qoderwork, .gemini].contains(self) }
 }
 
 public enum ExecutionPermission: String, Codable, CaseIterable, Identifiable {
@@ -43,8 +61,9 @@ public struct AgentSettings: Codable, Equatable {
     public var reasoningEffort: ReasoningEffort = .inherit
     public var rules: [AgentRule] = []
     public var sessionTitle = ""
+    public var agentCommand = ""
     public init() {}
-    private enum CodingKeys: String, CodingKey { case engine, model, workdir, additionalDirectories, authorizedDirectories, permission, timeout, reasoningEffort, rules, sessionTitle }
+    private enum CodingKeys: String, CodingKey { case engine, model, workdir, additionalDirectories, authorizedDirectories, permission, timeout, reasoningEffort, rules, sessionTitle, agentCommand }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         engine = try values.decode(Engine.self, forKey: .engine)
@@ -64,6 +83,7 @@ public struct AgentSettings: Codable, Equatable {
         reasoningEffort = try values.decodeIfPresent(ReasoningEffort.self, forKey: .reasoningEffort) ?? .inherit
         rules = try values.decodeIfPresent([AgentRule].self, forKey: .rules) ?? []
         sessionTitle = try values.decodeIfPresent(String.self, forKey: .sessionTitle) ?? ""
+        agentCommand = try values.decodeIfPresent(String.self, forKey: .agentCommand) ?? ""
     }
     public func encode(to encoder: Encoder) throws {
         var values = encoder.container(keyedBy: CodingKeys.self)
@@ -74,6 +94,7 @@ public struct AgentSettings: Codable, Equatable {
         if reasoningEffort != .inherit { try values.encode(reasoningEffort, forKey: .reasoningEffort) }
         if !rules.isEmpty { try values.encode(rules, forKey: .rules) }
         if !sessionTitle.isEmpty { try values.encode(sessionTitle, forKey: .sessionTitle) }
+        if !agentCommand.isEmpty { try values.encode(agentCommand, forKey: .agentCommand) }
     }
 }
 
@@ -244,6 +265,12 @@ public enum Validation {
         guard parts.count == 2, parts.allSatisfy({ !$0.isEmpty }) else { throw DashboardError.invalid("请绑定明确的 corpId:userId 账号") }
     }
     public static func agent(_ value: AgentSettings) throws {
+        if value.engine == .custom && value.agentCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw DashboardError.invalid("请填写自定义 Agent 的启动命令")
+        }
+        guard value.engine.supportsAdditionalDirectories || value.additionalDirectories.isEmpty else {
+            throw DashboardError.invalid("此引擎仅支持一个工作目录，请移除多余目录")
+        }
         var directory: ObjCBool = false
         guard value.authorizedDirectories.count <= 32 else { throw DashboardError.invalid("最多添加 32 个授权目录") }
         for path in value.authorizedDirectories {

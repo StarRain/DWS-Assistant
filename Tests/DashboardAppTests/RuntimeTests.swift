@@ -1,10 +1,14 @@
 import XCTest
+import Darwin
 @testable import DashboardCore
 @testable import DWSAssistant
 
 @MainActor
 final class RuntimeTests: XCTestCase {
     private func fixture(slowAI: Bool, format: ReplyFormat = .text) throws -> (DashboardModel, URL) {
+        // XCTest bypasses App.init; match the app's handling of a child that
+        // closes stdin while a cancellation or reply is in flight.
+        signal(SIGPIPE, SIG_IGN)
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("dashboard-runtime-\(UUID())")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: dir) }

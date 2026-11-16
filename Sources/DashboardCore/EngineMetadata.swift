@@ -23,7 +23,7 @@ public struct EngineMetadata: Equatable {
     public func effectiveDefaults(for settings: AgentSettings) -> EngineDefaults {
         let option = option(for: settings.model)
         let model = option?.resolvedModel.nonempty ?? settings.model.nonempty ?? defaultModel
-        let effort = settings.engine == .gemini ? "" : settings.reasoningEffort != .inherit
+        let effort = !settings.engine.supportsReasoning ? "" : settings.reasoningEffort != .inherit
             ? settings.reasoningEffort.rawValue
             : configuredEffort.nonempty ?? option?.defaultEffort ?? ""
         return EngineDefaults(model: model, effort: effort)
@@ -67,7 +67,7 @@ public struct EngineDefaults: Equatable {
     public init(model: String = "", effort: String = "") { self.model = model; self.effort = effort }
     public static func read(engine: Engine, workdir: String, home: URL = FileManager.default.homeDirectoryForCurrentUser,
                             environment: [String: String] = ProcessInfo.processInfo.environment) -> EngineDefaults {
-        guard engine != .codex else { return EngineDefaults() }
+        guard [.claude, .qoder, .gemini].contains(engine) else { return EngineDefaults() }
         let folder = engine == .claude ? ".claude" : engine == .qoder ? ".qoder" : ".gemini"
         let user = environment[engine == .claude ? "CLAUDE_CONFIG_DIR" : engine == .qoder ? "QODER_CONFIG_DIR" : "GEMINI_CLI_HOME"]
         let base = user.map { URL(fileURLWithPath: $0) } ?? home.appendingPathComponent(folder)
@@ -99,6 +99,11 @@ public struct EngineDefaults: Equatable {
 
 public enum EngineMetadataReader {
     public static func read(engine: Engine, workdir: String, config: DashboardConfig, cacheDirectory: URL) async throws -> EngineMetadata {
+        if ![.codex, .claude, .qoder, .gemini].contains(engine) {
+            var result = EngineMetadata()
+            result.detail = engine == .custom ? "启动命令按 DWS 官方 agent-cmd 执行" : "使用 DWS 官方适配器；模型留空沿用渠道默认值"
+            return result
+        }
         let workdir = try DashboardPaths.agentWorkdir(workdir, fallback: cacheDirectory.appendingPathComponent("workspace", isDirectory: true))
         let executable = try Executables.resolve(engine.executable, overrides: config.executablePaths)
         var environment = Executables.environment(overrides: config.executablePaths)

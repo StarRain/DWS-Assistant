@@ -119,6 +119,7 @@ public enum Commands {
         var sessionSettings = settings
         sessionSettings.rules = []
         sessionSettings.sessionTitle = ""
+        if settings.engine != .custom { sessionSettings.agentCommand = "" }
         let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
         // Only effective instructions affect memory. Editing a disabled rule or
         // regenerating its local UI identifier must not reset an engine session.
@@ -130,7 +131,7 @@ public enum Commands {
             "model": settings.model, "workdir": settings.workdir, "additional_directories": settings.additionalDirectories, "state_dir": stateDirectory,
             "authorized_directories": authorizedDirectories,
             "full_permission": settings.permission == .full, "timeout_seconds": settings.timeout,
-            "reasoning_effort": settings.reasoningEffort.rawValue]
+            "reasoning_effort": settings.engine.supportsReasoning ? settings.reasoningEffort.rawValue : ""]
         if settings.engine == .codex && !rules.isEmpty { payload["custom_rules"] = rules }
         if settings.engine == .codex {
             payload["codex_home"] = CodexHistory.home(stateDirectory: URL(fileURLWithPath: stateDirectory, isDirectory: true)).path
@@ -139,6 +140,7 @@ public enum Commands {
             payload["session_title"] = customTitle.isEmpty ? String(sessionTitle.prefix(120)) : customTitle
         }
         if !images.isEmpty { payload["image_paths"] = images }
+        if settings.engine == .custom { payload["agent_command"] = settings.agentCommand }
         let data = try JSONSerialization.data(withJSONObject: payload, options: .sortedKeys)
         return CommandSpec(executable: bridgePath, arguments: [], stdin: String(decoding: data, as: UTF8.self), directory: settings.workdir, environment: Executables.environment(overrides: config.executablePaths), timeout: TimeInterval(settings.timeout + 10))
     }

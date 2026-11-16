@@ -46,6 +46,7 @@ final class DashboardModel: ObservableObject {
     @Published var notice: String?
     @Published var selection = "overview"
     @Published var detectedPaths: [String: String] = [:]
+    private var engineDetectionID = UUID()
     @Published var loginAtStartup = false
     @Published var storageFailure: String?
     @Published private var engineMetadata: [String: EngineMetadata] = [:]
@@ -82,7 +83,7 @@ final class DashboardModel: ObservableObject {
     var hasActiveWork: Bool { personalRunning || startupTask != nil || loggingIn || loggingOut || !listeners.isEmpty || !replyTasks.isEmpty || !feedbackTasks.isEmpty }
     var needsSetup: Bool { !preview && (!config.setupCompleted || !dwsInstalled || !accountOK || storageFailure != nil) }
     var dwsInstalled: Bool { detectedPaths["dws"].map { $0 != "未找到" } ?? false }
-    var installedEngines: [Engine] { Engine.allCases.filter { detectedPaths[$0.executable].map { $0 != "未找到" } ?? false } }
+    var installedEngines: [Engine] { Engine.installedCLIEngines.filter { detectedPaths[$0.rawValue].map { $0 != "未找到" } ?? false } }
     var canCompleteSetup: Bool { !preview && !refreshing && !loggingIn && !loggingOut && storageFailure == nil && dwsInstalled && accountOK }
     var conversations: [Conversation] {
         guard let profile else { return [] }
@@ -160,7 +161,23 @@ final class DashboardModel: ObservableObject {
 
     func report(_ error: Error) { notice = Redaction.clean(error.localizedDescription); log(notice!, level: "错误") }
     func detectExecutables() {
-        detectedPaths = Dictionary(uniqueKeysWithValues: (["dws"] + Engine.allCases.map(\.executable)).map { ($0, (try? Executables.resolve($0, overrides: config.executablePaths)) ?? "未找到") })
+        detectedPaths = Dictionary(uniqueKeysWithValues: Engine.installedCLIEngines.map {
+            ($0.rawValue, (try? Executables.resolve($0.executable, overrides: config.executablePaths)) ?? "未找到")
+        })
+        detectedPaths["dws"] = (try? Executables.resolve("dws", overrides: config.executablePaths)) ?? "未找到"
+        let detectionID = UUID(); engineDetectionID = detectionID
+        let bridge = nativeBridgePath(), overrides = config.executablePaths
+        guard !preview, FileManager.default.isExecutableFile(atPath: bridge) else { return }
+        Task { [weak self] in
+            let spec = CommandSpec(executable: bridge, arguments: ["--channels"], environment: Executables.environment(overrides: overrides), timeout: 5)
+            guard let result = try? await ProcessRunner.run(spec), result.status == 0,
+                  let rows = (try? JSONSerialization.jsonObject(with: Data(result.stdout.utf8))) as? [String: [String: Any]],
+                  let self, self.engineDetectionID == detectionID else { return }
+            for engine in Engine.installedCLIEngines where engine.usesBridge && overrides[engine.executable, default: ""].isEmpty {
+                guard let row = rows[engine.channel] else { continue }
+                self.detectedPaths[engine.rawValue] = row["installed"] as? Bool == true ? row["path"] as? String ?? "未找到" : "未找到"
+            }
+        }
     }
 
     func refreshDWSInstallation() {
@@ -187,6 +204,7 @@ final class DashboardModel: ObservableObject {
     }
 
     func engineSummary(_ settings: AgentSettings) -> String {
+        if settings.engine == .custom { return settings.engine.title }
         let metadata = engineMetadata[engineMetadataKey(settings)]
         let effective = (metadata ?? EngineMetadata()).effectiveDefaults(for: settings)
         let model = effective.model.nonempty ?? (metadata == nil && !preview ? "读取中…" : "默认模型")
@@ -393,8 +411,9 @@ final class DashboardModel: ObservableObject {
         guard accountOK, c.profile == profile?.id else { throw DashboardError.invalid("会话不属于当前钉钉账号") }
         _ = try Commands.listener(c, config: config)
         if c.autoReply {
-            _ = try Executables.resolve(c.agent.engine.executable, overrides: config.executablePaths)
-            if c.agent.engine != .gemini && !FileManager.default.isExecutableFile(atPath: nativeBridgePath()) {
+            try Validation.agent(c.agent)
+            if !c.agent.engine.usesBridge { _ = try Executables.resolve(c.agent.engine.executable, overrides: config.executablePaths) }
+            if c.agent.engine.usesBridge && !FileManager.default.isExecutableFile(atPath: nativeBridgePath()) {
                 throw DashboardError.invalid("官方适配包装程序缺失，请运行完整构建脚本")
             }
         }

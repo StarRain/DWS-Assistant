@@ -39,7 +39,7 @@ Captured in preview mode. Account details, chats and statistics are sample data.
 
 ### AI replies and interactive cards
 
-- Supports **Codex, Claude Code, Qoder and Gemini**, using CLIs you have already installed and signed in to.
+- Supports **Codex, Claude Code, Qoder, QoderWork, OpenCode, WorkBuddy, CodeBuddy, Gemini, Pi**, and **custom Agents**. Built-in channels use existing installations and sign-in state; custom Agents can use local models.
 - Set the engine, model, reasoning level and execution permissions for each chat. Available options can be read from the engine.
 - Reply with plain text, Markdown or AI cards. Cards show processing status first, then update the same card with the result.
 - Interactive cards support confirmation, cancellation, single and multiple choices, and text input. The default response timeout is **60 seconds** and can be changed.
@@ -72,11 +72,13 @@ Interface language does not change chat names, custom rules, engine settings, AI
 DingTalk group / direct chat
   → Official DWS event subscription
   → Chat settings, trigger checks and reply deduplication
-  → Local AI engine (Codex / Claude Code / Qoder / Gemini)
+  → Local AI engine (built-in channel / custom Agent)
   → DWS replies to the original chat using the current account
 ```
 
-DWS handles authorization, messages and reactions. DWS Assistant manages chat settings and task state, reusing the local AI adapters from a pinned DWS version. Gemini uses a local CLI adapter. The app does not move your installed tools or change their global configuration.
+DWS handles authorization, messages and reactions. DWS Assistant manages chat settings and task state, reusing the local AI adapters from a pinned DWS version. Gemini retains its existing local CLI adapter. For `custom`, enter a headless launch command in chat settings; it is passed unchanged to the official DWS `agent-cmd` adapter, which appends the message as the last argument and uses stdout as the reply. Model, permissions and memory for custom Agents belong in the command or Agent configuration. Complex launch logic should be placed in a wrapper script, following the pinned DWS command parsing behavior. The app does not move your installed tools or change their global configuration.
+
+The `dsh` channel uses a separate digital-employee binding and host lifecycle. It is not available in this personal-account dashboard.
 
 ## Installation
 
@@ -96,7 +98,7 @@ shasum -a 256 -c DWS-Assistant-1.0.0-arm64.dmg.sha256
 
 - macOS 14 or later. The current build has been verified on Apple Silicon.
 - [DWS CLI](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli#installation) installed.
-- At least one installed and signed-in AI engine for automatic replies: Codex, Claude Code, Qoder or Gemini.
+- An installed and signed-in built-in AI engine, or a custom Agent that runs once per message and writes its reply to stdout.
 - Building from source requires Swift 6, Xcode command line tools, Go 1.26.7 or later, and Python 3.
 
 ### Build from source

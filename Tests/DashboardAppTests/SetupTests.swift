@@ -33,7 +33,7 @@ final class SetupTests: XCTestCase {
         if installed { try installMock(in: dir) }
         var config = DashboardConfig()
         config.setupCompleted = completed
-        config.executablePaths = Dictionary(uniqueKeysWithValues: (["dws"] + Engine.allCases.map(\.executable)).map { ($0, dir.appendingPathComponent($0).path) })
+        config.executablePaths = Dictionary(uniqueKeysWithValues: (["dws"] + Engine.executableNames).map { ($0, dir.appendingPathComponent($0).path) })
         try JSONStore(directory: dir.appendingPathComponent("state")).save(config, to: "config.json")
         return (DashboardModel(directory: dir.appendingPathComponent("state"), authDirectories: [dir]), dir)
     }

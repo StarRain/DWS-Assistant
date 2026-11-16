@@ -18,6 +18,7 @@ fi
 rm -f .build/vendor/dws/internal/helpers/dashboard_bridge.go .build/vendor/dws/internal/helpers/dashboard_bridge_test.go
 cp Integrations/DWSBridge/assistant_bridge.go .build/vendor/dws/internal/helpers/assistant_bridge.go
 cp Integrations/DWSBridge/assistant_bridge_test.go .build/vendor/dws/internal/helpers/assistant_bridge_test.go
+cp Integrations/DWSBridge/dashboard_channels_test.go .build/vendor/dws/internal/helpers/dashboard_channels_test.go
 cp Integrations/DWSBridge/dashboard_codex_storage.go .build/vendor/dws/internal/helpers/dashboard_codex_storage.go
 cp Integrations/DWSBridge/dashboard_codex_storage_test.go .build/vendor/dws/internal/helpers/dashboard_codex_storage_test.go
 cp Integrations/DWSBridge/dashboard_progress.go .build/vendor/dws/internal/helpers/dashboard_progress.go
