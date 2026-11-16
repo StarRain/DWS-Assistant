@@ -14,8 +14,10 @@ if [[ ! -d .build/vendor/dws ]]; then
   tar -xzf .build/vendor/dws-v1.0.66.tar.gz -C .build/vendor
   mv ".build/vendor/dingtalk-workspace-cli-$revision" .build/vendor/dws
 fi
-cp Integrations/DWSBridge/dashboard_bridge.go .build/vendor/dws/internal/helpers/dashboard_bridge.go
-cp Integrations/DWSBridge/dashboard_bridge_test.go .build/vendor/dws/internal/helpers/dashboard_bridge_test.go
+# Remove cached overlays from before the bridge source files were renamed.
+rm -f .build/vendor/dws/internal/helpers/dashboard_bridge.go .build/vendor/dws/internal/helpers/dashboard_bridge_test.go
+cp Integrations/DWSBridge/assistant_bridge.go .build/vendor/dws/internal/helpers/assistant_bridge.go
+cp Integrations/DWSBridge/assistant_bridge_test.go .build/vendor/dws/internal/helpers/assistant_bridge_test.go
 cp Integrations/DWSBridge/dashboard_codex_storage.go .build/vendor/dws/internal/helpers/dashboard_codex_storage.go
 cp Integrations/DWSBridge/dashboard_codex_storage_test.go .build/vendor/dws/internal/helpers/dashboard_codex_storage_test.go
 cp Integrations/DWSBridge/dashboard_progress.go .build/vendor/dws/internal/helpers/dashboard_progress.go
