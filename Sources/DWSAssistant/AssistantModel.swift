@@ -1009,7 +1009,9 @@ final class AssistantModel: ObservableObject {
                    self.personalRunning, self.epoch == generation, self.accountOK, self.profile?.id == c.profile,
                    self.config.conversations.first(where: { $0.id == id }) == c {
                     do {
-                        let content = try AICardReply.statusContent(reference, status: (error as? ReplyTimeout)?.message ?? "处理未完成，请查看面板日志。不会自动重试。", progress: liveProgress?.snapshot ?? .init())
+                        let status = (error as? ReplyTimeout)?.message ?? (error as? IncomingImageError)?.errorDescription
+                            ?? "处理未完成，请查看面板日志。不会自动重试。"
+                        let content = try AICardReply.statusContent(reference, status: status, progress: liveProgress?.snapshot ?? .init())
                         let result = try await ProcessRunner.run(Commands.updateCard(reference, content: content, config: self.config))
                         if try AICardReply.updateAccepted(result, reference: reference) {
                             var closed = reference; closed.interaction = nil; closed.finishContent = content

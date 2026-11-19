@@ -9,8 +9,27 @@ public struct ImageResource: Equatable {
     public let conversationID: String
 }
 
+public enum IncomingImageError: LocalizedError, Equatable {
+    case messageReadDenied
+
+    public var errorDescription: String? {
+        "当前 DWS 渠道未开放消息内容读取，无法识别这条图片或表情包。请改用文字描述。"
+    }
+}
+
 public enum IncomingImages {
     public static func resources(_ result: CommandResult, event: IMEvent) throws -> [ImageResource] {
+        // DWS emits PAT denials as JSON on stderr, sometimes alongside
+        // diagnostic lines. Do not repeat its generic administrator hint:
+        // a denied command may have no user-accessible permission switch.
+        for output in [result.stderr, result.stdout] {
+            for candidate in [output] + output.split(whereSeparator: \.isNewline).map(String.init) {
+                guard let object = (try? JSONSerialization.jsonObject(with: Data(candidate.utf8))) as? [String: Any],
+                      object["code"] as? String == "PAT_ORG_POLICY_DENIED",
+                      (object["data"] as? [String: Any])?["scope"] as? String == "chat.message:list" else { continue }
+                throw IncomingImageError.messageReadDenied
+            }
+        }
         let data = JSONOutput.payload(try JSONOutput.object(result))
         guard data["messagesComplete"] as? Bool != false, let rows = data["messages"] as? [[String: Any]] else {
             throw AssistantError.command("图片消息详情读取失败")

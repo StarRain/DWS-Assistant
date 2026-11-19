@@ -17,8 +17,9 @@ public struct IMEvent: Equatable {
         conversationID = obj["conversation_id"] as? String ?? ""
         senderID = obj["sender_open_dingtalk_id"] as? String ?? ""
         content = String((obj["content"] as? String ?? "").prefix(12_000))
-        // These are only hints to fetch metadata. Resource IDs and download
-        // commands are never taken from chat text.
+        // Only explicit image hints trigger metadata reads. Empty bodies may
+        // be unsupported stickers or other non-text messages, not images.
+        // Resource IDs and download commands are never taken from chat text.
         if Self.mayContainImage(content) { imageMessageIDs.append(messageID) }
         if let quoted = obj["quoted_message"] as? [String: Any],
            let text = quoted["content"] as? String, Self.mayContainImage(text),
@@ -33,7 +34,7 @@ public struct IMEvent: Equatable {
     public var isMessage: Bool { ["user_im_message_receive_group", "user_im_message_receive_at", "user_im_message_receive_o2o"].contains(type) }
     public static func mayContainImage(_ text: String) -> Bool {
         let lower = text.lowercased()
-        return text.isEmpty || ["[图片", "[图像", "[image", "[picture", "mediaid", "![", "\"image\"", "\"picture\""].contains(where: lower.contains)
+        return ["[图片", "[图像", "[image", "[picture", "mediaid", "![", "\"image\"", "\"picture\""].contains(where: lower.contains)
     }
 }
 
@@ -53,7 +54,8 @@ public enum EventRouting {
         return ["user_im_message_receive_group", "user_im_message_receive_at"].contains(event.type) && event.conversationID == conversation.stableID
     }
     public static func shouldReply(_ event: IMEvent, profile: String, conversation: Conversation, currentSenderID: String) -> Bool {
-        guard matches(event, profile: profile, conversation: conversation), conversation.autoReply, !event.content.isEmpty || !event.imageMessageIDs.isEmpty else { return false }
+        guard matches(event, profile: profile, conversation: conversation), conversation.autoReply,
+              !event.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !event.imageMessageIDs.isEmpty else { return false }
         guard isIncoming(event, currentSenderID: currentSenderID) else { return false }
         if conversation.kind == .contact { return true }
         switch conversation.trigger {

@@ -44,7 +44,8 @@ Captured in preview mode. Account details, chats and statistics are sample data.
 - Reply with plain text, Markdown or AI cards. Cards show processing status first, then update the same card with the result.
 - Interactive cards support confirmation, cancellation, single and multiple choices, and text input. The default response timeout is **60 seconds** and can be changed.
 - Codex cards can show actual command and tool progress. Reactions on the original message can indicate processing, completion or failure.
-- Supports images in the current message and quoted messages from the same chat, subject to the selected model's capabilities.
+- Supports images in the current message and quoted messages from the same chat when the DWS channel permits reading message content, subject to the selected model's capabilities. If access is denied, the assistant asks for a text description.
+- Ordinary emoji are handled as text. Empty messages are skipped without fetching image metadata.
 
 ### Rules and context
 

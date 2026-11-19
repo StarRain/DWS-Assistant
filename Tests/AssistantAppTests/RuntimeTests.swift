@@ -17,6 +17,7 @@ final class RuntimeTests: XCTestCase {
         let script = #"""
         #!/bin/bash
         base="$(cd "$(dirname "$0")" && pwd)"
+        printf '%s\n' "$*" >> "$base/commands"
         if [[ "$1" == "event" && "$3" == "user_card_action_triggered" ]]; then
           echo card-listener >> "$base/card-listeners"
           echo '[event] ready subscribe_id=mock-card' >&2
@@ -82,6 +83,13 @@ final class RuntimeTests: XCTestCase {
           /bin/cat > "$base/sent-body"
           echo sent >> "$base/sends"
           echo '{"deliveryStatus":"delivered","openMessageId":"mock-sent"}'
+        elif [[ "$2" == "+messages-mget" ]]; then
+          echo read >> "$base/metadata-reads"
+          if [[ -f "$base/image-details-error.json" ]]; then
+            /bin/cat "$base/image-details-error.json" >&2
+            exit 1
+          fi
+          echo '{}'
         elif [[ "$1" == "chat" ]]; then
           printf '%s\n' "$*" >> "$base/reactions"
           echo '{"success":true}'
@@ -166,6 +174,63 @@ final class RuntimeTests: XCTestCase {
         """#
         let script = try String(contentsOf: path, encoding: .utf8).replacingOccurrences(of: "echo generated", with: progress + "\necho generated")
         try script.write(to: path, atomically: false, encoding: .utf8)
+    }
+
+    func testEmptyMessagesDoNotReadMetadataAndEmojiStillReply() async throws {
+        let (model, dir) = try fixture(slowAI: false)
+        addTeardownBlock { _ = await model.stopAll() }
+        try writeEvents([("group", "empty", "sender", ""), ("group", "blank", "sender", " \n"),
+                         ("group", "emoji", "sender", "😂👍")], to: dir.appendingPathComponent("events.ndjson"))
+        model.startPersonal()
+        for _ in 0..<150 where model.deliveredCount == 0 { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertTrue(model.personalRunning)
+        _ = await model.stopAll()
+        XCTAssertEqual(model.deliveredCount, 1)
+        XCTAssertEqual(count("metadata-reads", in: dir), 0)
+        XCTAssertEqual(count("generations", in: dir), 1)
+        XCTAssertEqual(count("sends", in: dir), 1)
+        XCTAssertFalse(model.activities.contains { $0.message.contains("回复已停止") })
+    }
+
+    func testDeniedImageReadStopsOnlyThatMessageAndClosesCardWithReason() async throws {
+        for format in [ReplyFormat.text, .aiCard] {
+            let (model, dir) = try fixture(slowAI: false, format: format)
+            addTeardownBlock { _ = await model.stopAll() }
+            try Data(#"{"success":false,"code":"PAT_ORG_POLICY_DENIED","data":{"scope":"chat.message:list","reasonCode":"COMMAND_INACTIVE","clientSecret":"private-test-value"}}"#.utf8)
+                .write(to: dir.appendingPathComponent("image-details-error.json"))
+            try writeEvents([("group", "image", "sender", "[图片消息]")], to: dir.appendingPathComponent("events.ndjson"))
+            model.startPersonal()
+            for _ in 0..<150 where !model.activities.contains(where: { $0.message.contains("请改用文字描述") }) { try await Task.sleep(for: .milliseconds(20)) }
+            XCTAssertTrue(model.personalRunning)
+            _ = await model.stopAll()
+            XCTAssertTrue(model.activities.contains { $0.message.contains("当前 DWS 渠道未开放消息内容读取") })
+            XCTAssertFalse(model.activities.contains { $0.message.contains("private-test-value") || $0.message.contains("PAT_ORG_POLICY_DENIED") })
+            XCTAssertEqual(count("metadata-reads", in: dir), 1)
+            XCTAssertEqual(count("generations", in: dir), 0)
+            XCTAssertEqual(count("sends", in: dir), 0)
+            if format == .aiCard {
+                XCTAssertEqual(count("card-creates", in: dir), 1)
+                XCTAssertEqual(count("card-updates", in: dir), 1)
+                let body = try String(contentsOf: dir.appendingPathComponent("card-update-body"), encoding: .utf8)
+                XCTAssertTrue(body.contains("请改用文字描述"))
+                XCTAssertFalse(body.contains("处理未完成，请查看面板日志"))
+            }
+            let commands = try String(contentsOf: dir.appendingPathComponent("commands"), encoding: .utf8)
+            XCTAssertFalse(commands.contains("+messages-resource-download"))
+            XCTAssertFalse(commands.contains("pat "))
+
+            // The denied message remains deduplicated; a later text message
+            // can still be handled under the same account and permissions.
+            try writeEvents([("group", "image", "sender", "[图片消息]"), ("group", "text", "sender", "收到👍")],
+                            to: dir.appendingPathComponent("events.ndjson"))
+            model.startPersonal()
+            for _ in 0..<150 where !model.activities.contains(where: { $0.message.contains("AI 生成") }) { try await Task.sleep(for: .milliseconds(20)) }
+            _ = await model.stopAll()
+            XCTAssertEqual(count("metadata-reads", in: dir), 1)
+            XCTAssertEqual(count("generations", in: dir), 1)
+            if format == .text { XCTAssertEqual(model.deliveredCount, 1) }
+            else { XCTAssertEqual(count("card-creates", in: dir), 2) }
+        }
     }
 
     func testInitialExecutionTimeoutExplainsConversationLimitInLogAndCard() async throws {

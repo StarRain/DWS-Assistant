@@ -68,6 +68,50 @@ import XCTest
         let foreign = try IMEvent(line: #"{"message_id":"m","conversation_id":"c","content":"看这张图","quoted_message":{"message_id":"quoted","conversation_id":"other","content":"[图片消息]"}}"#)
         XCTAssertTrue(foreign.imageMessageIDs.isEmpty)
     }
+    func testEmptyMessagesAreIgnoredWhileUnicodeEmojiRemainText() throws {
+        var conversation = Conversation()
+        conversation.profile = "corp:user"; conversation.stableID = "c"
+        conversation.listen = true; conversation.autoReply = true; conversation.trigger = .all
+        func event(_ content: Any?) throws -> IMEvent {
+            var object: [String: Any] = ["type": "user_im_message_receive_group", "message_id": "m",
+                "conversation_id": "c", "sender_open_dingtalk_id": "other"]
+            object["content"] = content
+            return try IMEvent(line: String(decoding: JSONSerialization.data(withJSONObject: object), as: UTF8.self))
+        }
+        for content in [nil, NSNull(), "", " \n\t"] as [Any?] {
+            let empty = try event(content)
+            XCTAssertTrue(empty.imageMessageIDs.isEmpty)
+            XCTAssertFalse(EventRouting.shouldReply(empty, profile: "corp:user", conversation: conversation, currentSenderID: "self"))
+        }
+        for content in ["😂👍", "👨‍👩‍👧‍👦", "[微笑]", "收到👍"] {
+            let text = try event(content)
+            XCTAssertEqual(text.content, content)
+            XCTAssertTrue(text.imageMessageIDs.isEmpty)
+            XCTAssertTrue(EventRouting.shouldReply(text, profile: "corp:user", conversation: conversation, currentSenderID: "self"))
+        }
+        let emptyQuote = try IMEvent(line: #"{"message_id":"m","conversation_id":"c","content":"回复表情","quoted_message":{"message_id":"sticker","conversation_id":"c","content":""}}"#)
+        XCTAssertTrue(emptyQuote.imageMessageIDs.isEmpty)
+    }
+    func testMessageReadDenialExplainsUnavailableImagesWithoutExposingPayload() throws {
+        let event = try IMEvent(line: #"{"message_id":"m","conversation_id":"c","content":"[图片消息]"}"#)
+        let denial = #"{"success":false,"code":"PAT_ORG_POLICY_DENIED","data":{"scope":"chat.message:list","reasonCode":"COMMAND_INACTIVE","clientSecret":"private-test-value","hint":"请联系组织管理员放开 scope"}}"#
+        for result in [CommandResult(status: 1, stdout: "", stderr: denial),
+                       CommandResult(status: 1, stdout: "", stderr: "diagnostic line\n" + denial + "\n"),
+                       CommandResult(status: 0, stdout: denial, stderr: "")] {
+            XCTAssertThrowsError(try IncomingImages.resources(result, event: event)) { error in
+                XCTAssertEqual(error as? IncomingImageError, .messageReadDenied)
+                XCTAssertTrue(error.localizedDescription.contains("请改用文字描述"))
+                XCTAssertFalse(error.localizedDescription.contains("private-test-value"))
+                XCTAssertFalse(error.localizedDescription.contains("管理员"))
+            }
+        }
+        for unrelated in [denial.replacingOccurrences(of: "chat.message:list", with: "chat.message:send"),
+                          denial.replacingOccurrences(of: "PAT_ORG_POLICY_DENIED", with: "PAT_AUTH_REQUIRED")] {
+            XCTAssertThrowsError(try IncomingImages.resources(CommandResult(status: 1, stdout: "", stderr: unrelated), event: event)) { error in
+                XCTAssertNil(error as? IncomingImageError)
+            }
+        }
+    }
     func testOutgoingGuardSurvivesRestartAndDoesNotMatchOtherRoutes() throws {
         let store = try JSONStore(directory: directory()), ledger = try DeliveryLedger(store: store)
         var c = Conversation(); c.profile = "corp:user"; c.stableID = "c"
