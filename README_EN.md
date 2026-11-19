@@ -23,7 +23,7 @@ DWS Assistant is a native macOS app that connects to DingTalk through [DingTalk 
 
 ## Preview
 
-![DWS Assistant in English](docs/assets/dashboard-dark-en.svg)
+![DWS Assistant in English](docs/assets/assistant-dark-en.svg)
 
 Captured in preview mode. Account details, chats and statistics are sample data.
 

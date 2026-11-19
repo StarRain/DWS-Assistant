@@ -23,7 +23,7 @@ DWS Assistant（DWS助手）是一个原生 macOS 应用，通过 [DingTalk Work
 
 ## 界面预览
 
-![DWS Assistant 主面板](docs/assets/dashboard-dark.svg)
+![DWS Assistant 主面板](docs/assets/assistant-dark.svg)
 
 截图来自预览模式，账号、会话和统计均为模拟数据。
 
