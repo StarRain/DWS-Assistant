@@ -21,11 +21,13 @@ public enum CodexHistory {
         return data.appendingPathComponent("codex", isDirectory: true)
     }
 
-    public static func scope(route: String) -> String { "dashboard-codex-v3-" + Digest.sha256(route) }
+    public static func scope(route: String) -> String { "assistant-codex-v3-" + Digest.sha256(route) }
 
     public static func load(route: String, dataDirectory: URL, limit: Int = 200) throws -> Snapshot {
         let state = dataDirectory.appendingPathComponent("agent-sessions", isDirectory: true)
-        let binding = state.appendingPathComponent("connect/\(scope(route: route))/codex-threads.json")
+        let current = state.appendingPathComponent("connect/\(scope(route: route))/codex-threads.json")
+        let legacy = state.appendingPathComponent("connect/\(LegacyCompatibility.codexScopePrefix + Digest.sha256(route))/codex-threads.json")
+        let binding = FileManager.default.fileExists(atPath: current.path) ? current : legacy
         guard FileManager.default.fileExists(atPath: binding.path) else { return Snapshot(entries: [], hasEarlier: false) }
         let mappings = try JSONDecoder().decode([String: String].self, from: Data(contentsOf: binding))
         guard let thread = mappings[Digest.sha256(route)], UUID(uuidString: thread) != nil else {

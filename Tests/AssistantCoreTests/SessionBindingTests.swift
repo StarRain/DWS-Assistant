@@ -3,7 +3,7 @@ import XCTest
 
 final class SessionBindingTests: XCTestCase {
     func payload(_ c: Conversation) throws -> [String: Any] {
-        let spec = try Commands.officialAgent(c.agent, prompt: "本轮消息", route: c.routingKey, bridgePath: "/bin/echo", stateDirectory: "/tmp/dashboard-session-tests", config: AssistantConfig(), sessionTitle: c.defaultCodexSessionTitle)
+        let spec = try Commands.officialAgent(c.agent, prompt: "本轮消息", route: c.routingKey, bridgePath: "/bin/echo", stateDirectory: "/tmp/assistant-session-tests", config: AssistantConfig(), sessionTitle: c.defaultCodexSessionTitle)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: Data(spec.stdin!.utf8)) as? [String: Any])
     }
 
@@ -52,7 +52,7 @@ final class SessionBindingTests: XCTestCase {
     }
 
     func testBridgeFailuresShowSafeActionableMessagesOnNonzeroExit() throws {
-        for (reason, detail) in ["session_resume_failed": "历史会话恢复失败", "session_busy": "历史会话正被其他 Codex 客户端占用", "session_storage_unavailable": "无法准备 Codex 专用会话目录", "session_storage_failed": "会话绑定保存失败", "engine_timeout": "执行超时", "authentication_required": "登录已失效", "unknown": "执行失败"] {
+        for (reason, detail) in ["session_resume_failed": "历史会话恢复失败", "session_busy": "历史会话正被其他 Codex 客户端占用", "session_storage_unavailable": "无法准备 Codex 专用会话目录", "session_storage_failed": "会话绑定保存失败", "engine_permissions_failed": "Codex 未应用当前执行权限", "engine_timeout": "引擎调用超时", "authentication_required": "登录已失效", "unknown": "执行失败"] {
             let json = try JSONSerialization.data(withJSONObject: ["error": "official_adapter_failed", "is_error": true, "reason": reason, "details": "secret-do-not-expose"])
             let result = CommandResult(status: 1, stdout: String(decoding: json, as: UTF8.self), stderr: "secret-do-not-expose")
             XCTAssertThrowsError(try Commands.finalAnswer(result, engine: .codex)) { error in
@@ -67,5 +67,22 @@ final class SessionBindingTests: XCTestCase {
         }
         let success = CommandResult(status: 0, stdout: "{\"result\":\"最终回复\",\"session_recreated\":true,\"session_action\":\"recreated\",\"session_reference\":\"123456abcdef\"}", stderr: "")
         XCTAssertEqual(try Commands.finalAnswer(success, engine: .codex), "最终回复")
+    }
+
+    func testConfiguredDeadlineUsesCapturedLimitInsteadOfBlamingEngine() throws {
+        let result = CommandResult(status: 1, stdout: #"{"error":"official_adapter_failed","is_error":true,"reason":"execution_timeout"}"#, stderr: "private-error")
+        for limit in [60, 180, 900] {
+            XCTAssertThrowsError(try Commands.finalAnswer(result, engine: .codex, executionTimeout: limit)) { error in
+                XCTAssertEqual(error as? ReplyTimeout, .executionLimit(seconds: limit))
+                XCTAssertTrue(error.localizedDescription.contains("此会话设置的 \(limit) 秒"))
+                XCTAssertFalse(error.localizedDescription.contains("Codex："))
+                XCTAssertFalse(error.localizedDescription.contains("private-error"))
+            }
+        }
+        let engineFailure = CommandResult(status: 1, stdout: #"{"is_error":true,"reason":"engine_timeout"}"#, stderr: "")
+        XCTAssertThrowsError(try Commands.finalAnswer(engineFailure, engine: .codex, executionTimeout: 180)) { error in
+            XCTAssertEqual(error as? ReplyTimeout, .engineReported(engine: .codex))
+            XCTAssertFalse(error.localizedDescription.contains("180"))
+        }
     }
 }

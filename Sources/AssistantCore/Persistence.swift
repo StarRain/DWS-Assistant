@@ -3,8 +3,12 @@ import CryptoKit
 import Darwin
 
 public enum AssistantPaths {
-    public static var dataDirectory: URL { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".dws-dashboard", isDirectory: true) }
-    public static var legacyDirectory: URL { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/DWS Dashboard", isDirectory: true) }
+    public static var dataDirectory: URL { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".dws-assistant", isDirectory: true) }
+    public static var legacyDirectories: [URL] {
+        LegacyCompatibility.dataDirectoryNames.map {
+            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent($0, isDirectory: true)
+        }
+    }
 
     public static func display(_ path: String, home: String = FileManager.default.homeDirectoryForCurrentUser.path) -> String {
         if path == home { return "~" }
@@ -24,21 +28,18 @@ public enum AssistantPaths {
         let files = FileManager.default
         guard !files.fileExists(atPath: target.path), files.fileExists(atPath: source.path) else { return }
         let lockPath = source.appendingPathComponent("instance.lock").path
-        let lock = Darwin.open(lockPath, O_RDWR)
+        let lock = Darwin.open(lockPath, O_CREAT | O_RDWR, 0o600)
         defer { if lock >= 0 { flock(lock, LOCK_UN); Darwin.close(lock) } }
-        if files.fileExists(atPath: lockPath) {
-            guard lock >= 0, flock(lock, LOCK_EX | LOCK_NB) == 0 else { throw AssistantError.storage("旧版面板仍在运行，请先退出旧版再迁移数据") }
-        }
-        let staging = target.deletingLastPathComponent().appendingPathComponent(".dws-dashboard-migration-" + UUID().uuidString, isDirectory: true)
-        try files.createDirectory(at: staging, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        defer { try? files.removeItem(at: staging) }
-        for name in ["config.json", "activity.json", "delivery-ledger.json", "agent-sessions"] {
-            let old = source.appendingPathComponent(name)
-            if files.fileExists(atPath: old.path) { try files.copyItem(at: old, to: staging.appendingPathComponent(name)) }
-        }
-        // Publish all copied files together; a failed migration cannot leave a
-        // config without its deduplication ledger. Keep the original as backup.
-        try files.moveItem(at: staging, to: target)
+        guard lock >= 0, flock(lock, LOCK_EX | LOCK_NB) == 0 else { throw AssistantError.storage("旧版面板仍在运行或数据目录不可访问，请先退出旧版并检查目录权限") }
+        // Move the complete store, including Codex SQLite/WAL/rollout files and
+        // the deduplication ledger. Keep a compatibility alias for absolute
+        // paths persisted by engines and for the old application's writer lock.
+        // Pre-create the alias so a permissions failure cannot strand the data.
+        try LegacyCompatibility.moveKeepingAlias(from: source, to: target)
+    }
+
+    public static func migrateStoredNames(in directory: URL) throws {
+        try LegacyCompatibility.migrateStorageNames(in: directory)
     }
 }
 
@@ -128,7 +129,8 @@ public final class DeliveryLedger {
         guard let record = records[recordID], record.route == conversation.id.uuidString, record.state == .accepted,
               let reference = record.card, reference.interaction?.consumed == false else { return nil }
         let submission = try event.validate(reference: reference, conversation: conversation, now: now, currentSenderID: currentSenderID)
-        return try reserveCardJob(record: record, action: event.action, submission: submission, now: now)
+        let verified = !event.operatorOpenDingTalkID.isEmpty && event.operatorOpenDingTalkID == currentSenderID ? event.operatorOpenDingTalkID : nil
+        return try reserveCardJob(record: record, action: event.action, submission: submission, now: now, verifiedOperatorID: verified)
     }
     public func reserveExpiredCard(recordID: String, conversation: Conversation, now: Date = Date()) throws -> CardActionJob? {
         guard let record = records[recordID], record.route == conversation.id.uuidString, record.state == .accepted,
@@ -139,7 +141,7 @@ public final class DeliveryLedger {
               interaction.configuration == (try CardInteraction.fingerprint(conversation)) else { return nil }
         return try reserveCardJob(record: record, action: "expire", submission: "", now: now)
     }
-    private func reserveCardJob(record: DeliveryRecord, action: String, submission: String, now: Date) throws -> CardActionJob? {
+    private func reserveCardJob(record: DeliveryRecord, action: String, submission: String, now: Date, verifiedOperatorID: String? = nil) throws -> CardActionJob? {
         guard var reference = record.card, let interaction = reference.interaction, !interaction.consumed else { return nil }
         let key = Digest.sha256("card-action|" + record.id + "|" + interaction.token)
         guard records[key] == nil else { return nil }
@@ -150,7 +152,7 @@ public final class DeliveryLedger {
         next[record.id]?.card = reference
         next[key] = DeliveryRecord(id: key, route: record.route, state: .generating, date: now, card: reference)
         try store.save(next, to: "delivery-ledger.json"); records = next
-        return CardActionJob(key: key, reference: reference, action: action, submission: submission)
+        return CardActionJob(key: key, reference: reference, action: action, submission: submission, verifiedOperatorID: verifiedOperatorID)
     }
     private static func bodyKey(_ text: String, profile: String, target: String) -> String {
         key(identity: "reply-body", profile: profile, target: target,

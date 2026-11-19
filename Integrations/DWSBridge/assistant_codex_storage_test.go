@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestDashboardBridgeDedicatedStorageSharesInputsOnly(t *testing.T) {
+func TestAssistantBridgeDedicatedStorageSharesInputsOnly(t *testing.T) {
 	native, dedicated := t.TempDir(), filepath.Join(t.TempDir(), "codex")
 	t.Setenv("CODEX_HOME", native)
 	for _, name := range []string{"config.toml", "auth.json", "state_5.sqlite", "queue_1.sqlite"} {
@@ -23,7 +23,7 @@ func TestDashboardBridgeDedicatedStorageSharesInputsOnly(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := dashboardPrepareCodexHome(dedicated); err != nil {
+	if err := assistantPrepareCodexHome(dedicated); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"config.toml", "auth.json"} {
@@ -41,7 +41,7 @@ func TestDashboardBridgeDedicatedStorageSharesInputsOnly(t *testing.T) {
 	if err := os.WriteFile(privateDB, []byte("panel history"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := dashboardPrepareCodexHome(dedicated); err != nil {
+	if err := assistantPrepareCodexHome(dedicated); err != nil {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(privateDB)
@@ -58,30 +58,30 @@ func TestDashboardBridgeDedicatedStorageSharesInputsOnly(t *testing.T) {
 	}
 }
 
-func TestDashboardBridgeStorageRejectsSharedOrUnavailableHome(t *testing.T) {
+func TestAssistantBridgeStorageRejectsSharedOrUnavailableHome(t *testing.T) {
 	native := t.TempDir()
 	t.Setenv("CODEX_HOME", native)
-	if err := dashboardPrepareCodexHome(native); err == nil {
+	if err := assistantPrepareCodexHome(native); err == nil {
 		t.Fatal("accepted desktop home")
 	}
 	alias := filepath.Join(t.TempDir(), "alias")
 	if err := os.Symlink(native, alias); err != nil {
 		t.Fatal(err)
 	}
-	if err := dashboardPrepareCodexHome(alias); err == nil {
+	if err := assistantPrepareCodexHome(alias); err == nil {
 		t.Fatal("accepted desktop symlink")
 	}
 	clearChannelEnv(t)
 	dir := t.TempDir()
-	protocol := dashboardCodexLifecycleStub(t, dir, "")
+	protocol := assistantCodexLifecycleStub(t, dir, "")
 	blocked := filepath.Join(dir, "blocked")
 	if err := os.WriteFile(blocked, []byte("not a directory"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	for _, home := range []string{"", blocked, native} {
-		req := DashboardAgentRequest{Channel: "codex", ConversationID: "c", ScopeID: "s", Text: "hello", WorkDir: dir, StateDir: t.TempDir(), CodexHome: home, TimeoutSeconds: 10}
-		_, err := RunDashboardAgentWithStatus(context.Background(), req)
-		if err == nil || DashboardAgentFailureReason(err) != "session_storage_unavailable" {
+		req := AssistantAgentRequest{Channel: "codex", ConversationID: "c", ScopeID: "s", Text: "hello", WorkDir: dir, StateDir: t.TempDir(), CodexHome: home, TimeoutSeconds: 10}
+		_, err := RunAssistantAgentWithStatus(context.Background(), req)
+		if err == nil || AssistantAgentFailureReason(err) != "session_storage_unavailable" {
 			t.Fatalf("invalid storage accepted: %v", err)
 		}
 	}
@@ -90,22 +90,22 @@ func TestDashboardBridgeStorageRejectsSharedOrUnavailableHome(t *testing.T) {
 	}
 }
 
-func TestDashboardBridgeNewStorageCreatesThenResumesOwnSession(t *testing.T) {
+func TestAssistantBridgeNewStorageCreatesThenResumesOwnSession(t *testing.T) {
 	clearChannelEnv(t)
 	native, state, dir := t.TempDir(), t.TempDir(), t.TempDir()
 	t.Setenv("CODEX_HOME", native)
-	protocol := dashboardCodexLifecycleStub(t, dir, "")
+	protocol := assistantCodexLifecycleStub(t, dir, "")
 	envLog := filepath.Join(dir, "engine-env.json")
-	t.Setenv("DASHBOARD_STUB_ENV_LOG", envLog)
-	req := DashboardAgentRequest{Channel: "codex", ConversationID: "c", ScopeID: "dashboard-codex-v3-test", Text: "new message", WorkDir: dir, StateDir: state, CodexHome: filepath.Join(state, "codex \"中文\""), TimeoutSeconds: 10}
+	t.Setenv("ASSISTANT_STUB_ENV_LOG", envLog)
+	req := AssistantAgentRequest{Channel: "codex", ConversationID: "c", ScopeID: "assistant-codex-v3-test", Text: "new message", WorkDir: dir, StateDir: state, CodexHome: filepath.Join(state, "codex \"中文\""), TimeoutSeconds: 10}
 	t.Setenv("DWS_CONFIG_DIR", state)
-	oldPath := codexThreadStorePath("dashboard-codex-v2-test-project-policy-v1")
+	oldPath := codexThreadStorePath("assistant-codex-v2-test-project-policy-v1")
 	newCodexThreadSessions(oldPath).setThreadID("c", "thr_desktop")
-	first, err := RunDashboardAgentWithStatus(context.Background(), req)
+	first, err := RunAssistantAgentWithStatus(context.Background(), req)
 	if err != nil || first.SessionAction != "created" {
 		t.Fatalf("%+v %v", first, err)
 	}
-	second, err := RunDashboardAgentWithStatus(context.Background(), req)
+	second, err := RunAssistantAgentWithStatus(context.Background(), req)
 	if err != nil || second.SessionAction != "resumed" || second.SessionReference != first.SessionReference {
 		t.Fatalf("%+v %v", second, err)
 	}

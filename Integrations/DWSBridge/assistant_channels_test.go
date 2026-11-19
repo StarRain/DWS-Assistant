@@ -13,21 +13,21 @@ import (
     "testing"
 )
 
-func TestDashboardBridgeCustomUsesOfficialCommandContract(t *testing.T) {
+func TestAssistantBridgeCustomUsesOfficialCommandContract(t *testing.T) {
     clearChannelEnv(t)
     dir := t.TempDir()
     log := filepath.Join(dir, "argv")
-    t.Setenv("DASHBOARD_COMMAND_LOG", log)
+    t.Setenv("ASSISTANT_COMMAND_LOG", log)
     t.Setenv("DWS_AGENT_CMD", "/bin/false")
     writeShellExecutable(t, dir, "local-agent", `
-printf '%s\n' "$@" > "$DASHBOARD_COMMAND_LOG"
-pwd >> "$DASHBOARD_COMMAND_LOG"
+printf '%s\n' "$@" > "$ASSISTANT_COMMAND_LOG"
+pwd >> "$ASSISTANT_COMMAND_LOG"
 printf 'local model answer'
 `)
     t.Setenv("PATH", dir+":/usr/bin:/bin")
     prompt := "hello $(touch never-run) `whoami` ; 中文"
-    req := DashboardAgentRequest{Channel:"custom", AgentCommand:"local-agent --local-model", ConversationID:"c", ScopeID:"s", Text:prompt, WorkDir:dir, StateDir:t.TempDir(), TimeoutSeconds:10}
-    answer, err := RunDashboardAgent(context.Background(), req)
+    req := AssistantAgentRequest{Channel:"custom", AgentCommand:"local-agent --local-model", ConversationID:"c", ScopeID:"s", Text:prompt, WorkDir:dir, StateDir:t.TempDir(), TimeoutSeconds:10}
+    answer, err := RunAssistantAgent(context.Background(), req)
     if err != nil || answer != "local model answer" { t.Fatalf("answer=%q error=%v", answer, err) }
     data, err := os.ReadFile(log); if err != nil { t.Fatal(err) }
     lines := strings.Split(strings.TrimSpace(string(data)), "\n")
@@ -35,55 +35,55 @@ printf 'local model answer'
     actualDir, _ := filepath.EvalSymlinks(dir)
     if lines[2] != dir && lines[2] != actualDir { t.Fatalf("workdir=%q want %q", lines[2], dir) }
     req.AgentCommand = " "
-    if _, err := RunDashboardAgent(context.Background(), req); err == nil { t.Fatal("empty custom command accepted") }
+    if _, err := RunAssistantAgent(context.Background(), req); err == nil { t.Fatal("empty custom command accepted") }
     req.Channel = "dsh"
-    if _, err := RunDashboardAgent(context.Background(), req); err == nil { t.Fatal("external DSH host accepted as local Agent") }
+    if _, err := RunAssistantAgent(context.Background(), req); err == nil { t.Fatal("external DSH host accepted as local Agent") }
 }
 
-func TestDashboardBridgeBuddyChannelsUseOfficialStreamingAndOptions(t *testing.T) {
+func TestAssistantBridgeBuddyChannelsUseOfficialStreamingAndOptions(t *testing.T) {
     for _, channel := range []string{"codebuddy", "workbuddy"} { t.Run(channel, func(t *testing.T) {
         clearChannelEnv(t)
         dir := t.TempDir(); log := filepath.Join(dir, "argv")
-        t.Setenv("DASHBOARD_COMMAND_LOG", log)
+        t.Setenv("ASSISTANT_COMMAND_LOG", log)
         writeShellExecutable(t, dir, "codebuddy", `
-printf '%s\n' "$@" > "$DASHBOARD_COMMAND_LOG"
+printf '%s\n' "$@" > "$ASSISTANT_COMMAND_LOG"
 printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"buddy answer"}'
 `)
         t.Setenv("PATH", dir+":/usr/bin:/bin")
-        req := DashboardAgentRequest{Channel:channel, ConversationID:"c", ScopeID:"s", Text:"hello", Model:"chosen-model", WorkDir:dir, StateDir:t.TempDir(), TimeoutSeconds:10}
-        answer, err := RunDashboardAgent(context.Background(), req)
+        req := AssistantAgentRequest{Channel:channel, ConversationID:"c", ScopeID:"s", Text:"hello", Model:"chosen-model", WorkDir:dir, StateDir:t.TempDir(), TimeoutSeconds:10}
+        answer, err := RunAssistantAgent(context.Background(), req)
         if err != nil || answer != "buddy answer" { t.Fatalf("answer=%q error=%v", answer, err) }
         data, _ := os.ReadFile(log)
         if !strings.Contains(string(data), "--model\nchosen-model\n") || !strings.Contains(string(data), "stream-json") || !strings.Contains(string(data), "--session-id") || strings.Contains(string(data), "bypassPermissions") { t.Fatalf("unexpected args: %s", data) }
         req.FullPermission = true
-        if _, err := RunDashboardAgent(context.Background(), req); err != nil { t.Fatal(err) }
+        if _, err := RunAssistantAgent(context.Background(), req); err != nil { t.Fatal(err) }
         data, _ = os.ReadFile(log)
         if !strings.Contains(string(data), "bypassPermissions") || !strings.Contains(string(data), "--resume") { t.Fatalf("official permission/session options missing: %s", data) }
     }) }
 }
 
-func TestDashboardBridgeQoderWorkUsesOfficialProtocol(t *testing.T) {
+func TestAssistantBridgeQoderWorkUsesOfficialProtocol(t *testing.T) {
     clearChannelEnv(t)
     dir := t.TempDir()
     _, log := writeQoderStreamStub(t, dir)
     t.Setenv("DWS_QODER_STUB_LOG", log)
     t.Setenv("PATH", dir+":/usr/bin:/bin")
-    req := DashboardAgentRequest{Channel:"qoderwork", ConversationID:"c", ScopeID:"s", Text:"hello", WorkDir:dir, StateDir:t.TempDir(), TimeoutSeconds:10}
-    if answer, err := RunDashboardAgent(context.Background(), req); err != nil || answer == "" { t.Fatalf("answer=%q error=%v", answer, err) }
+    req := AssistantAgentRequest{Channel:"qoderwork", ConversationID:"c", ScopeID:"s", Text:"hello", WorkDir:dir, StateDir:t.TempDir(), TimeoutSeconds:10}
+    if answer, err := RunAssistantAgent(context.Background(), req); err != nil || answer == "" { t.Fatalf("answer=%q error=%v", answer, err) }
 }
 
-func TestDashboardBridgePiUsesOfficialJSONProtocol(t *testing.T) {
+func TestAssistantBridgePiUsesOfficialJSONProtocol(t *testing.T) {
     clearChannelEnv(t)
     dir := t.TempDir(); log := filepath.Join(dir, "argv")
-    t.Setenv("DASHBOARD_COMMAND_LOG", log)
+    t.Setenv("ASSISTANT_COMMAND_LOG", log)
     writeShellExecutable(t, dir, "pi", `
-printf '%s\n' "$@" > "$DASHBOARD_COMMAND_LOG"
+printf '%s\n' "$@" > "$ASSISTANT_COMMAND_LOG"
 cat >/dev/null
 printf '%s\n' '{"type":"message_end","message":{"role":"assistant","stopReason":"stop","content":[{"type":"text","text":"pi answer"}]}}' '{"type":"agent_end"}'
 `)
     t.Setenv("PATH", dir+":/usr/bin:/bin")
-    req := DashboardAgentRequest{Channel:"pi", ConversationID:"c", ScopeID:"s", Text:"hello", Model:"provider/model", WorkDir:dir, StateDir:t.TempDir(), TimeoutSeconds:10}
-    answer, err := RunDashboardAgent(context.Background(), req)
+    req := AssistantAgentRequest{Channel:"pi", ConversationID:"c", ScopeID:"s", Text:"hello", Model:"provider/model", WorkDir:dir, StateDir:t.TempDir(), TimeoutSeconds:10}
+    answer, err := RunAssistantAgent(context.Background(), req)
     if err != nil || answer != "pi answer" { t.Fatalf("answer=%q error=%v", answer, err) }
     data, _ := os.ReadFile(log)
     for _, expected := range []string{"--mode\njson", "--model\nprovider/model", "--no-tools", "--session"} {
@@ -91,13 +91,13 @@ printf '%s\n' '{"type":"message_end","message":{"role":"assistant","stopReason":
     }
 }
 
-type dashboardChannelTransport func(*http.Request) (*http.Response, error)
-func (f dashboardChannelTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+type assistantChannelTransport func(*http.Request) (*http.Response, error)
+func (f assistantChannelTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
-func TestDashboardBridgeOpenCodeUsesOfficialServerAPI(t *testing.T) {
+func TestAssistantBridgeOpenCodeUsesOfficialServerAPI(t *testing.T) {
     clearChannelEnv(t)
     var message map[string]any
-    transport := dashboardChannelTransport(func(r *http.Request) (*http.Response, error) {
+    transport := assistantChannelTransport(func(r *http.Request) (*http.Response, error) {
         body := "{}"
         switch r.URL.Path {
         case "/session": body = `{"id":"session-test"}`
@@ -117,20 +117,20 @@ func TestDashboardBridgeOpenCodeUsesOfficialServerAPI(t *testing.T) {
     dir := t.TempDir()
     writeShellExecutable(t, dir, "opencode", "exit 1")
     t.Setenv("PATH", dir+":/usr/bin:/bin")
-    req := DashboardAgentRequest{Channel:"opencode", ConversationID:"c", ScopeID:"s", Text:"hello", Model:"provider/model", WorkDir:dir, StateDir:t.TempDir(), TimeoutSeconds:10}
-    answer, err := RunDashboardAgent(context.Background(), req)
+    req := AssistantAgentRequest{Channel:"opencode", ConversationID:"c", ScopeID:"s", Text:"hello", Model:"provider/model", WorkDir:dir, StateDir:t.TempDir(), TimeoutSeconds:10}
+    answer, err := RunAssistantAgent(context.Background(), req)
     if err != nil || answer != "opencode answer" { t.Fatalf("answer=%q error=%v", answer, err) }
     if len(argv) < 2 || argv[0] != "serve" || argv[1] != "--pure" { t.Fatalf("server argv=%v", argv) }
     model, ok := message["model"].(map[string]any)
     if !ok || model["providerID"] != "provider" || model["modelID"] != "model" { t.Fatalf("model=%v", message["model"]) }
 }
 
-func TestDashboardBridgeStatusUsesOfficialRegistry(t *testing.T) {
+func TestAssistantBridgeStatusUsesOfficialRegistry(t *testing.T) {
     clearChannelEnv(t)
     dir := t.TempDir()
     writeShellExecutable(t, dir, "codebuddy", "exit 99")
     t.Setenv("PATH", dir+":/usr/bin:/bin")
-    statuses := DashboardAgentStatuses()
+    statuses := AssistantAgentStatuses()
     for _, name := range []string{"qoderwork", "opencode", "workbuddy", "codebuddy", "pi"} {
         if _, ok := statuses[name]; !ok { t.Fatalf("missing channel %s", name) }
     }

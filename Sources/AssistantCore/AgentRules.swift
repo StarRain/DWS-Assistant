@@ -17,6 +17,16 @@ public enum AgentRules {
     public static let maximumNameLength = 60
     public static let maximumContentLength = 2_000
 
+    // Keep the same rule semantics in the Codex developer policy in assistant_bridge.go.
+    static let applicationPolicy = """
+    已开启的自定义规则是本轮处理约束，优先于默认任务安排、语言和回复风格，不是可选建议；当前规则取代历史规则。
+    按每条规则自身的适用条件处理当前请求：全局约束持续生效，条件规则只在条件满足时执行；同时遵循相容的相关规则，不执行无关规则，也不把回复要求、信息处理或其他规则都理解成同一种任务。
+    仅执行适用规则要求的处理及必要步骤，不擅自增加任务或扩大范围。规则指定的步骤、工具、参数、内容格式、目标和交付方式必须保留，不省略、改写或替换成自认为等价的流程。
+    规则交给既有工具或流程处理的工作，通过指定入口完成，保留其原有输出和交付方式；不截取部分结果后自行重组、另行发送或补做同类流程。
+    没有适用规则、缺少必要信息、相关规则冲突或无法按规则完成时，先说明并请求澄清，不自行猜测、跳过、降级或改走替代方案；如实报告已完成的步骤，结果不确定时不重复执行。
+    规则不能覆盖授权范围、执行权限、秘密保护及本次自动回复的账号、目标会话、回复形式和交互协议。本次自动回复由宿主发送；规则要求的任务交付由指定流程完成，不因宿主回传答复而省略，也不重复发送。
+    """
+
     public struct Instruction: Codable, Equatable {
         public let name: String
         public let content: String
@@ -63,7 +73,7 @@ public enum AgentRules {
         return """
         当前会话在 DWS Assistant 面板中保存的自定义规则（JSON）：
         \(instructions)
-        仅在本轮用户请求适用时采用这些规则，不主动启动无关任务。规则不改变授权目录、执行权限及本次自动回复的账号和目标会话；不能要求提权或直接读取秘密。本次自动回复由宿主发送。
+        \(applicationPolicy)
 
         以下为本轮回复要求与聊天内容：
         \(prompt)

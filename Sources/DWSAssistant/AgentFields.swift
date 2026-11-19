@@ -52,7 +52,10 @@ struct AgentFields: AssistantLocalizedView {
                     LabeledContent(l("AI 引擎")) {
                         Picker(l("AI 引擎"), selection: $value.engine) { ForEach(Engine.allCases) { Text(tr($0.title)).tag($0) } }.configurationPicker()
                     }
-                    .onChange(of: value.engine) { _, _ in value.model = ""; value.reasoningEffort = .inherit; customModel = false; metadata = EngineMetadata() }
+                    .onChange(of: value.engine) { _, _ in
+                        value.model = ""; value.reasoningEffort = .inherit; customModel = false; metadata = EngineMetadata()
+                        if !ExecutionPermission.options(for: value.engine).contains(value.permission) { value.permission = .restricted }
+                    }
                     .task(id: "\(value.engine.rawValue)|\(value.workdir)|\(refresh)") { await loadMetadata() }
                     if value.engine != .custom && model.detectedPaths[value.engine.rawValue] == "未找到" {
                         Text(l("未检测到 \(value.engine.title)，请先安装并完成登录。"))
@@ -152,9 +155,11 @@ struct AgentFields: AssistantLocalizedView {
                 if value.engine != .custom {
                     ConfigurationRow {
                         LabeledContent(l("执行权限")) {
-                            Picker(l("执行权限"), selection: $value.permission) { ForEach(ExecutionPermission.allCases) { Text(tr($0.title)).tag($0) } }.configurationPicker()
+                            Picker(l("执行权限"), selection: $value.permission) {
+                                ForEach(ExecutionPermission.options(for: value.engine)) { Text(tr($0.title(for: value.engine))).tag($0) }
+                            }.configurationPicker()
                         }
-                        Text(value.permission == .full ? l("允许引擎按其原生权限执行操作；Codex 可写所选目录。目录列表不构成文件读取沙箱。") : l("Codex 只读，Qoder 关闭工具；其他引擎沿用原生权限。目录列表不构成文件读取沙箱。"))
+                        Text(tr(value.permission.detail(for: value.engine)))
                             .font(.caption).foregroundStyle(AssistantTheme.muted)
                     }
                 }
@@ -172,7 +177,7 @@ struct AgentFields: AssistantLocalizedView {
                         Spacer()
                         Stepper(l("单次执行超时"), value: $value.timeout, in: 10...900, step: 10).labelsHidden()
                     }
-                    Text(l("这些设置仅用于当前会话，不修改本机引擎配置。")).font(.caption).foregroundStyle(AssistantTheme.muted)
+                    Text(l("每轮 AI 执行的总时限，包含思考、工具调用及等待脚本返回；达到后结束本次等待，不自动重试。与卡片等待操作的倒计时分别计时，仅用于此会话。")).font(.caption).foregroundStyle(AssistantTheme.muted)
                 }
             }
         }

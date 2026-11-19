@@ -20,7 +20,7 @@ final class CardProgressUpdates {
         self.reference = reference; self.config = config; self.interval = interval; self.checkCurrent = checkCurrent
     }
 
-    func run(_ spec: CommandSpec) async throws -> CommandResult {
+    func run(_ spec: CommandSpec, approval: EngineApprovalCallbacks? = nil) async throws -> CommandResult {
         let job = ProcessJob(spec), buffer = buffer
         let updates = Task { @MainActor in
             var revision = 0
@@ -36,7 +36,7 @@ final class CardProgressUpdates {
                     var update = try Commands.updateCard(reference, content: content, processing: true, config: config)
                     update.timeout = 8
                     sending = true; writing = true
-                    let receipt = try await ProcessRunner.run(update)
+                    let receipt = try await ReplyExecution.command(update, timeout: ReplyTimeout.cardUpdate)
                     guard try AICardReply.updateAccepted(receipt, reference: reference) else {
                         throw AssistantError.command("执行进度更新结果待确认，已停止本次处理")
                     }
@@ -45,14 +45,14 @@ final class CardProgressUpdates {
                 } catch {
                     if ended && !sending { return }
                     if sending && !Task.isCancelled { uncertain = true }
-                    failure = sending ? AssistantError.command("执行进度更新结果待确认，已停止本次处理，不会自动重试") : error
+                    failure = sending && !(error is ReplyTimeout) ? AssistantError.command("执行进度更新结果待确认，已停止本次处理，不会自动重试") : error
                     job.cancel(failure!)
                     return
                 }
             }
         }
         let result: Result<CommandResult, Error>
-        do { result = .success(try await job.value { line, isError in if isError { buffer.receive(line: line) } }) }
+        do { result = .success(try await EngineApprovalProcess.run(spec, job: job, approval: approval?.decide, didRespond: approval?.didRespond) { buffer.receive(line: $0) }) }
         catch { result = .failure(error) }
         ended = true
         if Task.isCancelled || !writing { updates.cancel() }

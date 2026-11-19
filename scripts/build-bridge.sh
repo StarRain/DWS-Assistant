@@ -14,27 +14,31 @@ if [[ ! -d .build/vendor/dws ]]; then
   tar -xzf .build/vendor/dws-v1.0.66.tar.gz -C .build/vendor
   mv ".build/vendor/dingtalk-workspace-cli-$revision" .build/vendor/dws
 fi
-# Remove cached overlays from before the bridge source files were renamed.
-rm -f .build/vendor/dws/internal/helpers/dashboard_bridge.go .build/vendor/dws/internal/helpers/dashboard_bridge_test.go
+source "$root/scripts/legacy-build-compat.sh"
 cp Integrations/DWSBridge/assistant_bridge.go .build/vendor/dws/internal/helpers/assistant_bridge.go
 cp Integrations/DWSBridge/assistant_bridge_test.go .build/vendor/dws/internal/helpers/assistant_bridge_test.go
-cp Integrations/DWSBridge/dashboard_channels_test.go .build/vendor/dws/internal/helpers/dashboard_channels_test.go
-cp Integrations/DWSBridge/dashboard_codex_storage.go .build/vendor/dws/internal/helpers/dashboard_codex_storage.go
-cp Integrations/DWSBridge/dashboard_codex_storage_test.go .build/vendor/dws/internal/helpers/dashboard_codex_storage_test.go
-cp Integrations/DWSBridge/dashboard_progress.go .build/vendor/dws/internal/helpers/dashboard_progress.go
-cp Integrations/DWSBridge/dashboard_progress_test.go .build/vendor/dws/internal/helpers/dashboard_progress_test.go
-mkdir -p .build/vendor/dws/cmd/dashboard-bridge
-cp Integrations/DWSBridge/main.go .build/vendor/dws/cmd/dashboard-bridge/main.go
+cp Integrations/DWSBridge/assistant_channels_test.go .build/vendor/dws/internal/helpers/assistant_channels_test.go
+cp Integrations/DWSBridge/assistant_dws_environment_test.go .build/vendor/dws/internal/helpers/assistant_dws_environment_test.go
+cp Integrations/DWSBridge/assistant_codex_storage.go .build/vendor/dws/internal/helpers/assistant_codex_storage.go
+cp Integrations/DWSBridge/assistant_codex_storage_test.go .build/vendor/dws/internal/helpers/assistant_codex_storage_test.go
+cp Integrations/DWSBridge/assistant_codex_permissions.go .build/vendor/dws/internal/helpers/assistant_codex_permissions.go
+cp Integrations/DWSBridge/assistant_codex_permissions_test.go .build/vendor/dws/internal/helpers/assistant_codex_permissions_test.go
+cp Integrations/DWSBridge/assistant_approvals.go .build/vendor/dws/internal/helpers/assistant_approvals.go
+cp Integrations/DWSBridge/assistant_approvals_test.go .build/vendor/dws/internal/helpers/assistant_approvals_test.go
+cp Integrations/DWSBridge/assistant_progress.go .build/vendor/dws/internal/helpers/assistant_progress.go
+cp Integrations/DWSBridge/assistant_progress_test.go .build/vendor/dws/internal/helpers/assistant_progress_test.go
+mkdir -p .build/vendor/dws/cmd/assistant-bridge
+cp Integrations/DWSBridge/main.go .build/vendor/dws/cmd/assistant-bridge/main.go
 export GOCACHE="$root/.build/go-cache"
 export GOMODCACHE="$root/.build/go-mod"
 export GOPATH="$root/.build/go-path"
 export GOTOOLCHAIN=local
-go_bin="${DWS_ASSISTANT_GO:-${DWS_DASHBOARD_GO:-$root/.build/toolchain/go/bin/go}}"
+go_bin="${DWS_ASSISTANT_GO:-$root/.build/toolchain/go/bin/go}"
 if [[ ! -x "$go_bin" ]]; then go_bin="$(command -v go)"; fi
 cd .build/vendor/dws
-"$go_bin" build -trimpath -ldflags '-s -w' -o "$root/.build/bridge/dws-assistant-bridge" ./cmd/dashboard-bridge
-"$go_bin" list -deps -json ./cmd/dashboard-bridge > "$root/.build/bridge/modules.json"
+"$go_bin" build -trimpath -ldflags '-s -w' -o "$root/.build/bridge/dws-assistant-bridge" ./cmd/assistant-bridge
+"$go_bin" list -deps -json ./cmd/assistant-bridge > "$root/.build/bridge/modules.json"
 python3 "$root/scripts/collect-licenses.py" "$root/.build/bridge/modules.json" "$root/.build/bridge/Licenses"
 if [[ "${1:-}" == "--test" ]]; then
-  "$go_bin" test ./internal/helpers -run '^TestDashboardBridge' -count=1 -timeout 60s
+  "$go_bin" test ./internal/helpers -run '^TestAssistantBridge' -count=1 -timeout 60s
 fi

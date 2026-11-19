@@ -1,4 +1,4 @@
-// Copyright 2026 DWS Dashboard contributors
+// Copyright 2026 DWS Assistant contributors
 // SPDX-License-Identifier: Apache-2.0
 package helpers
 
@@ -9,9 +9,9 @@ import (
 	"syscall"
 )
 
-var errDashboardCodexStorage = errors.New("dedicated Codex storage unavailable")
+var errAssistantCodexStorage = errors.New("dedicated Codex storage unavailable")
 
-func dashboardNativeCodexHome() (string, error) {
+func assistantNativeCodexHome() (string, error) {
 	if path := os.Getenv("CODEX_HOME"); path != "" {
 		if !filepath.IsAbs(path) {
 			return "", errors.New("Codex home must be absolute")
@@ -22,11 +22,11 @@ func dashboardNativeCodexHome() (string, error) {
 	return filepath.Join(home, ".codex"), err
 }
 
-func dashboardPrepareCodexHome(destination string) error {
+func assistantPrepareCodexHome(destination string) error {
 	if !filepath.IsAbs(destination) {
 		return errors.New("dedicated Codex home must be absolute")
 	}
-	native, err := dashboardNativeCodexHome()
+	native, err := assistantNativeCodexHome()
 	if err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ func dashboardPrepareCodexHome(destination string) error {
 	if sourceErr == nil && actual == source {
 		return errors.New("dedicated Codex home must differ from desktop storage")
 	}
-	lock, err := os.OpenFile(filepath.Join(destination, ".dashboard-storage.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	lock, err := os.OpenFile(filepath.Join(destination, ".assistant-storage.lock"), os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
 	}

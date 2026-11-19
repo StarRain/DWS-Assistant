@@ -105,6 +105,7 @@ public enum Commands {
         var settings = settings
         try Validation.agent(settings)
         let authorizedDirectories = settings.authorizedDirectories
+        let privateWorkspace = settings.workdir.isEmpty
         let fallback = URL(fileURLWithPath: stateDirectory, isDirectory: true).appendingPathComponent("workspace", isDirectory: true)
         guard settings.engine != .gemini else { return try geminiCLI(settings, prompt: prompt, config: config, fallbackDirectory: fallback, images: images) }
         settings.workdir = try AssistantPaths.agentWorkdir(settings.workdir, fallback: fallback)
@@ -123,9 +124,28 @@ public enum Commands {
         let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
         // Only effective instructions affect memory. Editing a disabled rule or
         // regenerating its local UI identifier must not reset an engine session.
-        let fingerprint = String(decoding: try encoder.encode(sessionSettings), as: UTF8.self) + (rules.isEmpty ? "" : "|rules-v1:" + rules)
+        func fingerprint(_ value: AgentSettings) throws -> String {
+            String(decoding: try encoder.encode(value), as: UTF8.self) + (rules.isEmpty ? "" : "|rules-v1:" + rules)
+        }
+        var previousHashes: [String] = []
+        if settings.engine != .codex && privateWorkspace {
+            // The app's private working directory is not a user configuration
+            // change. Keep the session when the application data directory moves.
+            let previousPaths = [sessionSettings.workdir] + LegacyCompatibility.previousPrivateWorkspaces(
+                stateDirectory: URL(fileURLWithPath: stateDirectory, isDirectory: true), current: sessionSettings.workdir)
+            for path in previousPaths {
+                var previous = sessionSettings; previous.workdir = path
+                previousHashes.append(Digest.sha256(route + (try fingerprint(previous))))
+            }
+            sessionSettings.workdir = ""
+        }
         // Codex keeps one binding per route in the assistant's private store.
-        let scope = settings.engine == .codex ? CodexHistory.scope(route: route) : "dashboard-" + Digest.sha256(route + fingerprint)
+        let scope = settings.engine == .codex ? CodexHistory.scope(route: route) : "assistant-" + Digest.sha256(route + (try fingerprint(sessionSettings)))
+        if settings.engine != .codex {
+            previousHashes.append(String(scope.dropFirst("assistant-".count)))
+            try LegacyCompatibility.migrateEngineBinding(to: scope, previousHashes: previousHashes,
+                stateDirectory: URL(fileURLWithPath: stateDirectory, isDirectory: true))
+        }
         let text = settings.engine == .codex ? prompt : try AgentRules.prompt(prompt, rules: settings.rules)
         var payload: [String: Any] = ["channel": settings.engine.channel, "conversation_id": Digest.sha256(route), "scope_id": scope, "text": text,
             "model": settings.model, "workdir": settings.workdir, "additional_directories": settings.additionalDirectories, "state_dir": stateDirectory,
@@ -134,6 +154,8 @@ public enum Commands {
             "reasoning_effort": settings.engine.supportsReasoning ? settings.reasoningEffort.rawValue : ""]
         if settings.engine == .codex && !rules.isEmpty { payload["custom_rules"] = rules }
         if settings.engine == .codex {
+            payload["permission_mode"] = settings.permission.codexMode
+            payload["interactive_approvals"] = settings.permission == .requestApproval
             payload["codex_home"] = CodexHistory.home(stateDirectory: URL(fileURLWithPath: stateDirectory, isDirectory: true)).path
             if reportProgress { payload["report_progress"] = true }
             let customTitle = settings.sessionTitle.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -142,19 +164,25 @@ public enum Commands {
         if !images.isEmpty { payload["image_paths"] = images }
         if settings.engine == .custom { payload["agent_command"] = settings.agentCommand }
         let data = try JSONSerialization.data(withJSONObject: payload, options: .sortedKeys)
-        return CommandSpec(executable: bridgePath, arguments: [], stdin: String(decoding: data, as: UTF8.self), directory: settings.workdir, environment: Executables.environment(overrides: config.executablePaths), timeout: TimeInterval(settings.timeout + 10))
+        let interactive = settings.engine == .codex && settings.permission == .requestApproval
+        return CommandSpec(executable: bridgePath, arguments: [], stdin: String(decoding: data, as: UTF8.self) + "\n", directory: settings.workdir, environment: Executables.environment(overrides: config.executablePaths), timeout: TimeInterval(settings.timeout + 10), streaming: interactive, keepInputOpen: interactive)
     }
-    public static func finalAnswer(_ result: CommandResult, engine: Engine) throws -> String {
+    public static func finalAnswer(_ result: CommandResult, engine: Engine, executionTimeout: Int? = nil) throws -> String {
         let obj = (try? JSONSerialization.jsonObject(with: Data(result.stdout.utf8))) as? [String: Any]
         if obj?["is_error"] as? Bool == true || obj?["error"] != nil {
             let message: String
             switch obj?["reason"] as? String {
+            case "execution_timeout":
+                if let seconds = executionTimeout { throw ReplyTimeout.executionLimit(seconds: seconds) }
+                throw AssistantError.command("执行超时：已达到此会话设置的执行时限，未取得最终结果；不会自动重试")
             case "session_resume_failed": message = "历史会话恢复失败，未执行本次请求"
             case "session_busy": message = "历史会话正被其他 Codex 客户端占用，未执行本次请求；请释放该会话后重试"
             case "session_storage_unavailable": message = "无法准备 Codex 专用会话目录，未执行本次请求，请检查本地数据目录"
             case "session_storage_failed": message = "会话绑定保存失败，未执行本次请求，请检查本地数据目录"
             case "engine_settings_failed": message = "无法读取当前引擎设置，未执行本次请求"
-            case "engine_timeout": message = "执行超时，已停止本次请求"
+            case "engine_permissions_failed": message = "Codex 未应用当前执行权限，未执行本次请求；请检查 Codex 版本和权限配置"
+            case "engine_approval_unavailable": message = "Codex 原生审批通道不可用，未执行本次请求；请更新助手应用"
+            case "engine_timeout": throw ReplyTimeout.engineReported(engine: engine)
             case "cancelled": message = "本次执行已取消"
             case "engine_unavailable": message = "无法启动，请检查是否已安装"
             case "authentication_required": message = "登录已失效，请在引擎中重新登录"

@@ -3,7 +3,7 @@ import XCTest
 
 final class CodexHistoryTests: XCTestCase {
     private func temporaryDirectory() throws -> URL {
-        let path = FileManager.default.temporaryDirectory.appendingPathComponent("dashboard-history-\(UUID())")
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("assistant-history-\(UUID())")
         try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: path) }
         return path
@@ -50,7 +50,7 @@ final class CodexHistoryTests: XCTestCase {
     func testHistoryUsesOnlyNewBindingAndDedicatedStorage() throws {
         let data = try temporaryDirectory(), route = "account|group|one", thread = UUID().uuidString.lowercased()
         let key = Digest.sha256(route)
-        let oldBinding = data.appendingPathComponent("agent-sessions/connect/dashboard-codex-v2-\(key)-project-policy-v1/codex-threads.json")
+        let oldBinding = data.appendingPathComponent("agent-sessions/connect/\(LegacyCompatibility.retiredCodexScopePrefix)\(key)-project-policy-v1/codex-threads.json")
         try FileManager.default.createDirectory(at: oldBinding.deletingLastPathComponent(), withIntermediateDirectories: true)
         try JSONEncoder().encode([key: thread]).write(to: oldBinding)
         let oldData = try Data(contentsOf: oldBinding)

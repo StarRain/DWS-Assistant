@@ -29,9 +29,45 @@ public enum Engine: String, Codable, CaseIterable, Identifiable {
 }
 
 public enum ExecutionPermission: String, Codable, CaseIterable, Identifiable {
-    case restricted, full
+    // Keep the persisted "full" value: for Codex it has always meant auto-review.
+    // Full access requires a new, explicit selection; loading old settings never upgrades it.
+    case restricted, full, requestApproval, fullAccess
     public var id: String { rawValue }
-    public var title: String { self == .restricted ? "受限执行" : "宽松执行（引擎原生）" }
+    public var title: String {
+        switch self {
+        case .restricted: return "只读"
+        case .full: return "帮我批准"
+        case .requestApproval: return "请求批准"
+        case .fullAccess: return "完全访问权限"
+        }
+    }
+    public static func options(for engine: Engine) -> [Self] {
+        engine == .codex ? [.restricted, .requestApproval, .full, .fullAccess] : [.restricted, .full]
+    }
+    public func title(for engine: Engine) -> String {
+        if engine == .codex { return title }
+        if engine == .gemini { return self == .restricted ? "计划模式（只读）" : "自动执行（YOLO）" }
+        if engine == .qoder || engine == .qoderwork || engine == .pi { return self == .restricted ? "禁用工具" : "自动执行（引擎原生）" }
+        if [.claude, .workbuddy, .codebuddy].contains(engine) { return self == .restricted ? "引擎默认权限" : "跳过权限询问" }
+        return self == .restricted ? "引擎默认权限" : "自动执行（引擎原生）"
+    }
+    public func detail(for engine: Engine) -> String {
+        if engine != .codex { return "使用所选引擎原生的执行权限；授权目录仍限定任务范围。" }
+        switch self {
+        case .restricted: return "只读访问，不执行构建或文件修改，也不申请扩展权限。"
+        case .requestApproval: return "常规操作在工作区沙箱内运行；扩展权限时显示原生审批请求，由你批准本次操作或拒绝。"
+        case .full: return "常规操作在工作区沙箱内运行；需要扩展权限时由 Codex 自动审批，被拒绝的操作会停止。"
+        case .fullAccess: return "使用 Codex 完整访问模式，可访问工作区外的文件和网络；任务仍须符合你的授权及引擎策略。"
+        }
+    }
+    public var codexMode: String {
+        switch self {
+        case .restricted: return "read_only"
+        case .full: return "auto_review"
+        case .requestApproval: return "ask"
+        case .fullAccess: return "full_access"
+        }
+    }
 }
 
 public enum ReasoningEffort: String, Codable, CaseIterable, Identifiable {
@@ -132,6 +168,7 @@ public enum ReplyFormat: String, Codable, CaseIterable, Identifiable {
 }
 
 public struct Conversation: Codable, Identifiable, Equatable {
+    public var needsCardEvents: Bool { autoReply && (replyFormat == .aiCard || (agent.engine == .codex && agent.permission == .requestApproval)) }
     public static let defaultCardInteractionTimeout = 60
     public static let cardInteractionTimeoutRange = 10...86_400
     public var id = UUID()
@@ -265,6 +302,7 @@ public enum Validation {
         guard parts.count == 2, parts.allSatisfy({ !$0.isEmpty }) else { throw AssistantError.invalid("请绑定明确的 corpId:userId 账号") }
     }
     public static func agent(_ value: AgentSettings) throws {
+        guard ExecutionPermission.options(for: value.engine).contains(value.permission) else { throw AssistantError.invalid("此引擎不支持所选执行权限") }
         if value.engine == .custom && value.agentCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw AssistantError.invalid("请填写自定义 Agent 的启动命令")
         }

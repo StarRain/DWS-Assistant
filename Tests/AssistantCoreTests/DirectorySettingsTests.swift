@@ -24,7 +24,7 @@ final class DirectorySettingsTests: XCTestCase {
     }
 
     func testEmptySelectionLaunchesInAppWorkspaceWithoutHomeGrant() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("dashboard-empty-\(UUID())")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("assistant-empty-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }
         var settings = AgentSettings()
         let spec = try Commands.officialAgent(settings, prompt: "test", route: "route", bridgePath: "/bin/echo", stateDirectory: root.path, config: AssistantConfig())
@@ -43,7 +43,7 @@ final class DirectorySettingsTests: XCTestCase {
     }
 
     func testAuthorizedProjectsReachAdapterWithoutEnablingWrites() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("dashboard-projects-\(UUID())")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("assistant-projects-\(UUID())")
         let project = root.appendingPathComponent("project"), extra = root.appendingPathComponent("shared")
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -58,7 +58,7 @@ final class DirectorySettingsTests: XCTestCase {
     }
 
     func testPathAbbreviationOnlyMatchesCurrentHomeBoundary() {
-        XCTAssertEqual(AssistantPaths.display("/Users/me/.dws-dashboard", home: "/Users/me"), "~/.dws-dashboard")
+        XCTAssertEqual(AssistantPaths.display("/Users/me/.dws-assistant", home: "/Users/me"), "~/.dws-assistant")
         XCTAssertEqual(AssistantPaths.display("/Users/me", home: "/Users/me"), "~")
         XCTAssertEqual(AssistantPaths.display("/Users/meeting/file", home: "/Users/me"), "/Users/meeting/file")
         XCTAssertEqual(AssistantPaths.display("/opt/homebrew/bin", home: "/Users/me"), "/opt/homebrew/bin")

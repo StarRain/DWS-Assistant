@@ -26,7 +26,7 @@ struct AgentRulesEditor: AssistantLocalizedView {
                         .help(sources.isEmpty ? l("其他会话还没有可克隆的规则") : l("选择其他会话的规则，复制到当前会话"))
                     Button(l("添加规则"), action: addRule)
                 }
-                Text(l("为当前会话约定回复方式或任务步骤，AI 会按请求使用已开启的规则。"))
+                Text(l("规则可约定回复、信息处理或任务流程；助手严格遵循当前请求适用的已开启规则。"))
                     .font(.caption).foregroundStyle(AssistantTheme.muted)
             }.padding(22)
             AssistantDivider()

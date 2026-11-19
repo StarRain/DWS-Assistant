@@ -23,6 +23,7 @@ struct AssistantView: AssistantLocalizedView {
                 header
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
+                        EngineApprovalsView(center: model.engineApprovals)
                         if let failure = model.storageFailure { banner(diagnostic(failure), symbol: "exclamationmark.triangle", color: .red) }
                         if let notice = model.notice {
                             HStack(spacing: 12) {

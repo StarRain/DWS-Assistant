@@ -20,7 +20,7 @@ final class AgentRulesTests: XCTestCase {
     }
 
     private func workspace() throws -> URL {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("dashboard-rules-\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("assistant-rules-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
         return directory
@@ -56,14 +56,18 @@ final class AgentRulesTests: XCTestCase {
             var settings = AgentSettings(); settings.engine = engine
             if engine == .custom { settings.agentCommand = "/bin/echo" }
             settings.authorizedDirectories = [directory.path]
-            settings.rules = [AgentRule(name: "项目打包", content: content), AgentRule(name: "不启用", content: "disabled-sentinel", enabled: false)]
+            settings.rules = [AgentRule(name: "项目打包", content: content),
+                              AgentRule(name: "回复风格", content: "先给结论，再列依据。"),
+                              AgentRule(name: "信息整理", content: "收到会议记录时，只提取决定与待办；不要补充未提及的事项。"),
+                              AgentRule(name: "不启用", content: "disabled-sentinel", enabled: false)]
             let encoded = try AgentRules.encodedInstructions(settings.rules)
             let decoded = try JSONDecoder().decode([AgentRules.Instruction].self, from: Data(encoded.utf8))
-            XCTAssertEqual(decoded.count, 1); XCTAssertEqual(decoded[0].content, content)
+            XCTAssertEqual(decoded.map(\.content), Array(settings.rules.prefix(3)).map(\.content))
             if engine == .gemini {
                 var config = AssistantConfig(); config.executablePaths["gemini"] = "/bin/echo"
                 let command = try Commands.officialAgent(settings, prompt: "本轮聊天", route: "a", bridgePath: "/bin/echo", stateDirectory: directory.path, config: config)
                 XCTAssertTrue(command.stdin?.contains(encoded) == true)
+                XCTAssertTrue(command.stdin?.contains(AgentRules.applicationPolicy) == true)
                 XCTAssertFalse(command.stdin?.contains("disabled-sentinel") == true)
                 XCTAssertTrue(command.arguments.contains("plan")); XCTAssertFalse(command.arguments.contains("yolo"))
                 XCTAssertFalse(command.arguments.joined().contains("build.sh"), "Rules must never become host command arguments")
@@ -78,10 +82,20 @@ final class AgentRulesTests: XCTestCase {
                 } else {
                     XCTAssertNil(request["custom_rules"])
                     XCTAssertTrue((request["text"] as? String)?.contains(encoded) == true)
+                    XCTAssertTrue((request["text"] as? String)?.contains(AgentRules.applicationPolicy) == true)
                     XCTAssertFalse((request["text"] as? String)?.contains("disabled-sentinel") == true)
                 }
             }
         }
+    }
+
+    func testRemovingOrDisablingRulesRemovesTheirPolicyFromPrompt() throws {
+        let prompt = "解释这段文字，不执行其他操作。"
+        var rule = AgentRule(name: "回复风格", content: "先给结论，再列依据。")
+        XCTAssertTrue(try AgentRules.prompt(prompt, rules: [rule]).contains(AgentRules.applicationPolicy))
+        rule.enabled = false
+        XCTAssertEqual(try AgentRules.prompt(prompt, rules: [rule]), prompt)
+        XCTAssertEqual(try AgentRules.prompt(prompt, rules: []), prompt)
     }
 
     func testCodexUpdatesEffectiveRulesWithoutSplittingConversation() throws {
@@ -111,7 +125,7 @@ final class AgentRulesTests: XCTestCase {
         let prompt = EventRouting.prompt(event: event, context: [], format: .aiCard)
         let oldRestrictions = ["不另行发送或上传", "不调用钉钉、邮件等工具另外发送或上传", "不要调用钉钉、邮件等工具另外发消息、上传产物"]
         for permission in ExecutionPermission.allCases {
-            for engine in Engine.allCases {
+            for engine in Engine.allCases where ExecutionPermission.options(for: engine).contains(permission) {
                 var settings = AgentSettings(); settings.engine = engine; settings.permission = permission
                 if engine == .custom { settings.agentCommand = "/bin/echo" }
                 settings.authorizedDirectories = [directory.path]

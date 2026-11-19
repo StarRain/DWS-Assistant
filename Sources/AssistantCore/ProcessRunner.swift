@@ -9,9 +9,11 @@ public struct CommandSpec {
     public var environment: [String: String]?
     public var timeout: TimeInterval
     public var streaming: Bool
-    public init(executable: String, arguments: [String], stdin: String? = nil, directory: String? = nil, environment: [String: String]? = nil, timeout: TimeInterval = 45, streaming: Bool = false) {
+    public var keepInputOpen: Bool
+    public init(executable: String, arguments: [String], stdin: String? = nil, directory: String? = nil, environment: [String: String]? = nil, timeout: TimeInterval = 45, streaming: Bool = false, keepInputOpen: Bool = false) {
         self.executable = executable; self.arguments = arguments; self.stdin = stdin
         self.directory = directory; self.environment = environment; self.timeout = timeout; self.streaming = streaming
+        self.keepInputOpen = keepInputOpen
     }
 }
 
@@ -99,6 +101,7 @@ public final class ProcessJob: @unchecked Sendable {
                 lock.lock()
                 timer?.cancel(); timer = nil
                 completed = true
+                try? input.fileHandleForWriting.close()
                 let failure = stopped
                 let result = CommandResult(status: p.terminationStatus, stdout: String(decoding: outputData, as: UTF8.self), stderr: String(decoding: errorData, as: UTF8.self))
                 lock.unlock()
@@ -114,7 +117,7 @@ public final class ProcessJob: @unchecked Sendable {
             DispatchQueue.global(qos: .utility).async { [self] in
                 do {
                     if let text = spec.stdin { try input.fileHandleForWriting.write(contentsOf: Data(text.utf8)) }
-                    try input.fileHandleForWriting.close()
+                    if !spec.keepInputOpen { try input.fileHandleForWriting.close() }
                 } catch { /* The child may intentionally close stdin early. Its exit result is authoritative. */ }
             }
         }

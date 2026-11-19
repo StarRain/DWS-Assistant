@@ -17,7 +17,7 @@ final class EngineMetadataTests: XCTestCase {
         XCTAssertEqual(EngineMetadata().effectiveDefaults(for: settings), EngineDefaults())
     }
     private func temporaryDirectory() throws -> URL {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("dashboard-engine-\(UUID())")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("assistant-engine-\(UUID())")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
         return url

@@ -21,7 +21,7 @@ public struct AICardReply {
     public let interaction: CardInteraction?
     public let body: String
 
-    public init(text: String, key: String, conversation: Conversation? = nil, conversationID: String = "", surfaceID: String? = nil, processing: Bool = false, progress: AgentExecutionProgress = .init()) throws {
+    public init(text: String, key: String, conversation: Conversation? = nil, conversationID: String = "", surfaceID: String? = nil, processing: Bool = false, progress: AgentExecutionProgress = .init(), interactionExpiresAt: Date? = nil, interactionHint: String? = nil) throws {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf8.count <= 32_768 else {
             throw AssistantError.invalid("回复为空或超过 32 KiB")
         }
@@ -34,7 +34,7 @@ public struct AICardReply {
             let createdAt = Date()
             interaction = CardInteraction(token: UUID().uuidString, form: form,
                                           configuration: try CardInteraction.fingerprint(conversation),
-                                          conversationID: conversationID, expiresAt: createdAt.addingTimeInterval(TimeInterval(conversation.cardInteractionTimeout)),
+                                          conversationID: conversationID, expiresAt: interactionExpiresAt ?? createdAt.addingTimeInterval(TimeInterval(conversation.cardInteractionTimeout)),
                                           createdAt: createdAt)
         } else if form != nil { throw AssistantError.invalid("交互卡片缺少会话绑定") }
         else { interaction = nil }
@@ -76,11 +76,11 @@ public struct AICardReply {
             children += ["actions", "interaction-hint", "interaction-countdown"]
             components.append(["id": "actions", "component": "Row", "children": ["cancel", "submit"]])
             for action in ["cancel", "submit"] {
-                var context: [String: Any] = ["dashboardProtocol": "dws-dashboard-v1", "interactionToken": interaction.token, "surfaceId": surfaceID, "action": action]
+                var context: [String: Any] = [AssistantCardProtocol.contextKey: AssistantCardProtocol.version, "interactionToken": interaction.token, "surfaceId": surfaceID, "action": action]
                 if action == "submit" { context["answers"] = ["path": "/answers"] }
                 var button: [String: Any] = ["id": action, "component": "Button", "child": action + "-label",
                                             "variant": action == "submit" ? "primary" : "default",
-                                            "action": ["event": ["name": "dws_dashboard_" + action, "context": context]]]
+                                            "action": ["event": ["name": AssistantCardProtocol.actionPrefix + action, "context": context]]]
                 if action == "submit" && !checks.isEmpty {
                     // Input edits are local to DingTalk. Its disabled field is
                     // literal-only, and visibility-swapped buttons can retain
@@ -100,7 +100,7 @@ public struct AICardReply {
                 "endTime": Int64(interaction.expiresAt.timeIntervalSince1970 * 1_000),
                 "prefix": "请在 ", "suffix": " 内操作！", "gravity": "left",
                 "fallbackMarkdown": "操作截止时间：" + deadlineFormatter.string(from: interaction.expiresAt)])
-            components.append(["id": "interaction-hint", "component": "Text", "text": "提交后继续处理，结果更新在此卡片。"])
+            components.append(["id": "interaction-hint", "component": "Text", "text": interactionHint ?? "提交后继续处理，结果更新在此卡片。"])
         }
         if !processing && !progress.isEmpty {
             children.insert("execution-progress", at: 0)

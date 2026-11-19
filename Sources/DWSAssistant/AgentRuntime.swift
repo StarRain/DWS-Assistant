@@ -2,6 +2,19 @@ import Foundation
 import AssistantCore
 
 extension AssistantModel {
+    func agentCommand(for conversation: Conversation, prompt: String, conversationID: String, images: [String] = [], reportProgress: Bool = false, senderID: String? = nil, accountSenderID: String? = nil, cardSubmission: Bool = false) throws -> CommandSpec {
+        let current = try AgentConversationContext(conversation: conversation, conversationID: conversationID, senderID: senderID, accountSenderID: accountSenderID, cardSubmission: cardSubmission)
+        var command = try Commands.officialAgent(conversation.agent, prompt: current.adding(to: prompt), route: conversation.routingKey,
+            bridgePath: nativeBridgePath(), stateDirectory: dataURL.appendingPathComponent("agent-sessions").path, config: config,
+            images: images, sessionTitle: conversation.defaultCodexSessionTitle, reportProgress: reportProgress)
+        // Per-task metadata belongs to the host, not the shared CLI adapter.
+        // Use the routed event or saved card, never IDs from chat/form text.
+        command.environment?.merge(current.environment) { _, value in value }
+        let path = command.environment?["PATH"] ?? ""
+        command.environment?["PATH"] = dataURL.appendingPathComponent("bin").path + ":" + path
+        return command
+    }
+
     func recordAgentDiagnostics(_ result: CommandResult, conversation: Conversation) {
         let output = (try? JSONSerialization.jsonObject(with: Data(result.stdout.utf8))) as? [String: Any]
         if output?["session_recreated"] as? Bool == true {

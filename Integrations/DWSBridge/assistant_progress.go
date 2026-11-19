@@ -1,4 +1,4 @@
-// Copyright 2026 DWS Dashboard contributors
+// Copyright 2026 DWS Assistant contributors
 // Portions derived from DWS CLI, Copyright 2026 Alibaba Group.
 // SPDX-License-Identifier: Apache-2.0
 package helpers
@@ -14,7 +14,7 @@ import (
 
 // Only allowlisted lifecycle metadata crosses into the card renderer.
 // Never forward reasoning, commands, arguments, results, or raw identifiers.
-type DashboardAgentProgress struct {
+type AssistantAgentProgress struct {
 	Type    string `json:"type"`
 	Version int    `json:"version"`
 	ID      string `json:"id"`
@@ -22,26 +22,26 @@ type DashboardAgentProgress struct {
 	Status  string `json:"status"`
 }
 
-type dashboardProgressKey struct{}
+type assistantProgressKey struct{}
 
-func RunDashboardAgentWithProgress(ctx context.Context, r DashboardAgentRequest, emit func(DashboardAgentProgress)) (DashboardAgentResult, error) {
+func RunAssistantAgentWithProgress(ctx context.Context, r AssistantAgentRequest, emit func(AssistantAgentProgress)) (AssistantAgentResult, error) {
 	if emit != nil {
-		ctx = context.WithValue(ctx, dashboardProgressKey{}, emit)
+		ctx = context.WithValue(ctx, assistantProgressKey{}, emit)
 	}
-	return RunDashboardAgentWithStatus(ctx, r)
+	return RunAssistantAgentWithStatus(ctx, r)
 }
 
-func dashboardProgressSink(ctx context.Context) func(DashboardAgentProgress) {
-	emit, _ := ctx.Value(dashboardProgressKey{}).(func(DashboardAgentProgress))
+func assistantProgressSink(ctx context.Context) func(AssistantAgentProgress) {
+	emit, _ := ctx.Value(assistantProgressKey{}).(func(AssistantAgentProgress))
 	return emit
 }
 
-type dashboardCodexProgress struct {
-	emit func(DashboardAgentProgress)
-	seen map[string]DashboardAgentProgress
+type assistantCodexProgress struct {
+	emit func(AssistantAgentProgress)
+	seen map[string]AssistantAgentProgress
 }
 
-func (p *dashboardCodexProgress) handle(method string, raw json.RawMessage, threadID, turnID string) {
+func (p *assistantCodexProgress) handle(method string, raw json.RawMessage, threadID, turnID string) {
 	if p.emit == nil || (method != "item/started" && method != "item/completed") {
 		return
 	}
@@ -90,7 +90,7 @@ func (p *dashboardCodexProgress) handle(method string, raw json.RawMessage, thre
 		return
 	}
 	if p.seen == nil {
-		p.seen = make(map[string]DashboardAgentProgress)
+		p.seen = make(map[string]AssistantAgentProgress)
 	}
 	previous, exists := p.seen[item.ID]
 	// Bound each turn's progress stream and prevent duplicate/late starts
@@ -132,7 +132,7 @@ func (p *dashboardCodexProgress) handle(method string, raw json.RawMessage, thre
 		kind = previous.Kind
 	}
 	hash := sha256.Sum256([]byte(item.ID))
-	progress := DashboardAgentProgress{Type: "dws_agent_progress", Version: 1, ID: fmt.Sprintf("%x", hash[:8]), Kind: kind, Status: status}
+	progress := AssistantAgentProgress{Type: "dws_agent_progress", Version: 1, ID: fmt.Sprintf("%x", hash[:8]), Kind: kind, Status: status}
 	if exists && progress == previous {
 		return
 	}
@@ -140,9 +140,9 @@ func (p *dashboardCodexProgress) handle(method string, raw json.RawMessage, thre
 	p.emit(progress)
 }
 
-// Keep DWS's native request, attachment, server-request rejection and final
-// response parser. Add only typed public lifecycle events to the turn loop.
-func dashboardCodexTurn(ctx context.Context, c *codexAppServerClient, threadID, text string, attachments []connectMediaAttachment, instructions string, emit func(DashboardAgentProgress)) (string, error) {
+// Keep DWS's native turn input and final response parser. Forward typed
+// progress and allowlisted approval callbacks; reject other server requests.
+func assistantCodexTurn(ctx context.Context, c *codexAppServerClient, threadID, text string, attachments []connectMediaAttachment, instructions string, emit func(AssistantAgentProgress)) (string, error) {
 	id := c.requestID()
 	input := []map[string]string{{"type": "text", "text": text}}
 	for _, attachment := range attachments {
@@ -157,16 +157,19 @@ func dashboardCodexTurn(ctx context.Context, c *codexAppServerClient, threadID, 
 	if err := c.send(map[string]any{"id": id, "method": "turn/start", "params": params}); err != nil {
 		return "", err
 	}
-	progress := dashboardCodexProgress{emit: emit}
+	progress := assistantCodexProgress{emit: emit}
 	turnID := ""
 	completedAnswer := ""
+	items := make(map[string]json.RawMessage)
 	for {
 		msg, err := c.next(ctx)
 		if err != nil {
 			return "", c.withStderr("app-server stream ended before turn/completed", err)
 		}
 		if msg.ID != nil && msg.Method != "" {
-			c.rejectServerRequest(*msg.ID, msg.Method)
+			if err := assistantHandleApproval(ctx, c, msg, threadID, turnID, items); err != nil {
+				return "", err
+			}
 			continue
 		}
 		if msg.ID != nil && *msg.ID == id {
@@ -183,6 +186,21 @@ func dashboardCodexTurn(ctx context.Context, c *codexAppServerClient, threadID, 
 			}
 		}
 		progress.handle(msg.Method, msg.Params, threadID, turnID)
+		if msg.Method == "item/started" {
+			var event struct {
+				ThreadID string          `json:"threadId"`
+				TurnID   string          `json:"turnId"`
+				Item     json.RawMessage `json:"item"`
+			}
+			var item struct {
+				ID   string `json:"id"`
+				Type string `json:"type"`
+			}
+			if json.Unmarshal(msg.Params, &event) == nil && event.ThreadID == threadID && event.TurnID == turnID &&
+				json.Unmarshal(event.Item, &item) == nil && item.Type == "fileChange" && len(event.Item) <= 48*1024 && len(items) < 64 {
+				items[item.ID] = event.Item
+			}
+		}
 		switch msg.Method {
 		case "item/completed":
 			var event struct {
@@ -192,7 +210,7 @@ func dashboardCodexTurn(ctx context.Context, c *codexAppServerClient, threadID, 
 			}
 			if json.Unmarshal(msg.Params, &event) == nil && event.ThreadID == threadID &&
 				(turnID == "" || event.TurnID == "" || event.TurnID == turnID) {
-				answer, err := dashboardFinalMessage(event.Item)
+				answer, err := assistantFinalMessage(event.Item)
 				if err != nil {
 					return "", err
 				}
@@ -228,7 +246,7 @@ func dashboardCodexTurn(ctx context.Context, c *codexAppServerClient, threadID, 
 			}
 			final := completedAnswer
 			for _, item := range identity.Turn.Items {
-				answer, err := dashboardFinalMessage(item)
+				answer, err := assistantFinalMessage(item)
 				if err != nil {
 					return "", err
 				}
@@ -248,7 +266,7 @@ func dashboardCodexTurn(ctx context.Context, c *codexAppServerClient, threadID, 
 	}
 }
 
-func dashboardFinalMessage(raw json.RawMessage) (string, error) {
+func assistantFinalMessage(raw json.RawMessage) (string, error) {
 	var item struct{ Type, Phase, Text string }
 	if json.Unmarshal(raw, &item) != nil || item.Type != "agentMessage" ||
 		(item.Phase != "" && item.Phase != "final_answer") {

@@ -13,7 +13,7 @@ final class CardInteractionTests: XCTestCase {
     }
     private func event(_ ref: AICardReference, action: String = "submit", answers: [String: Any]? = nil, legacy: Bool = false,
                        edit: (inout [String: Any]) -> Void = { _ in }) throws -> CardActionEvent {
-        var context: [String: Any] = ["dashboardProtocol": "dws-dashboard-v1", "interactionToken": ref.interaction!.token,
+        var context: [String: Any] = ["assistantProtocol": "dws-assistant-v1", "interactionToken": ref.interaction!.token,
             "surfaceId": ref.surfaceID, "action": action,
             "answers": answers ?? ["q1": ["selected": ["release"]], "q2": ["custom": "备注 $(do-not-execute)"], "q3": ["selected": [String]()]],
             "questions": [["id": "q1", "options": [["id": "release", "label": "tampered-label"]]]]]
@@ -32,10 +32,10 @@ final class CardInteractionTests: XCTestCase {
     }
 
     private func nativeEvent(_ ref: AICardReference, action: String, edit: (inout [String: Any]) -> Void = { _ in }) throws -> CardActionEvent {
-        let context: [String: Any] = ["dashboardProtocol": "dws-dashboard-v1", "interactionToken": ref.interaction!.token,
+        let context: [String: Any] = ["assistantProtocol": "dws-assistant-v1", "interactionToken": ref.interaction!.token,
             "surfaceId": ref.surfaceID, "action": action,
             "answers": ["q1": ["selected": ["release"]], "q2": ["custom": "备注"], "q3": ["selected": [String]()]]]
-        var body: [String: Any] = ["a2uiEvent": ["version": "1.0", "action": ["name": "dws_dashboard_" + action,
+        var body: [String: Any] = ["a2uiEvent": ["version": "1.0", "action": ["name": "dws_assistant_" + action,
             "surfaceId": ref.surfaceID, "sourceComponentId": action, "context": context,
             "timestamp": ISO8601DateFormatter().string(from: Date())]],
             "bizInfoDTO": ["bizId": ref.bizID], "operatorDTO": ["openDingTalkId": "current-open-id"],
@@ -45,6 +45,37 @@ final class CardInteractionTests: XCTestCase {
         let data = try JSONSerialization.data(withJSONObject: ["type": "user_card_action_triggered", "event_id": "native-action",
             "timestamp": Int64(Date().timeIntervalSince1970 * 1000), "payload": ["body": body]])
         return try CardActionEvent(line: String(decoding: data, as: UTF8.self))
+    }
+
+    func testOldCardCallbacksRemainValidatedAfterProtocolRename() throws {
+        let c = conversation(), ref = try reference(c)
+        for name in ["submit", "cancel"] {
+            let old = try nativeEvent(ref, action: name) { body in
+                var event = body["a2uiEvent"] as! [String: Any]
+                var action = event["action"] as! [String: Any]
+                var context = action["context"] as! [String: Any]
+                context.removeValue(forKey: AssistantCardProtocol.contextKey)
+                context[LegacyCompatibility.cardContextKey] = LegacyCompatibility.cardProtocol
+                action["context"] = context; action["name"] = LegacyCompatibility.cardActionPrefix + name
+                event["action"] = action; body["a2uiEvent"] = event
+            }
+            let result = try old.validate(reference: ref, conversation: c, currentSenderID: "current-open-id")
+            XCTAssertTrue(name == "cancel" ? result == "已取消" : result.contains("Release"))
+            XCTAssertThrowsError(try old.validate(reference: ref, conversation: c, currentSenderID: "other"))
+        }
+        XCTAssertThrowsError(try event(ref) { context in
+            context[LegacyCompatibility.cardContextKey] = LegacyCompatibility.cardProtocol
+        })
+        XCTAssertThrowsError(try nativeEvent(ref, action: "submit") { body in
+            var event = body["a2uiEvent"] as! [String: Any]
+            var action = event["action"] as! [String: Any]
+            action["name"] = LegacyCompatibility.cardActionPrefix + "submit"
+            event["action"] = action; body["a2uiEvent"] = event
+        })
+        let card = try AICardReply(text: form, key: "new-card", conversation: c, conversationID: c.stableID)
+        XCTAssertTrue(card.replacementContent.contains(AssistantCardProtocol.version))
+        XCTAssertTrue(card.replacementContent.contains(AssistantCardProtocol.actionPrefix + "submit"))
+        XCTAssertFalse(card.replacementContent.contains(LegacyCompatibility.cardProtocol))
     }
 
     func testNativeA2UIActionsRequireCurrentOperatorAndKeepCardBinding() throws {
@@ -59,8 +90,8 @@ final class CardInteractionTests: XCTestCase {
         let wrongConversation = try nativeEvent(ref, action: "cancel") { $0["conversationContextDTO"] = ["openConversationId": "other"] }
         XCTAssertThrowsError(try wrongConversation.validate(reference: ref, conversation: c, currentSenderID: "current-open-id"))
         XCTAssertThrowsError(try nativeEvent(ref, action: "cancel") { body in
-            body["a2uiEvent"] = ["action": ["name": "dws_dashboard_cancel"]]
-            body["context"] = ["dashboardProtocol": "dws-dashboard-v1", "interactionToken": ref.interaction!.token,
+            body["a2uiEvent"] = ["action": ["name": "dws_assistant_cancel"]]
+            body["context"] = ["assistantProtocol": "dws-assistant-v1", "interactionToken": ref.interaction!.token,
                 "surfaceId": ref.surfaceID, "action": "cancel"]
         }, "Malformed native context must not fall back to a legacy copy")
     }
@@ -201,7 +232,7 @@ final class CardInteractionTests: XCTestCase {
         var changed = c; changed.agent.permission = .full
         XCTAssertThrowsError(try valid.validate(reference: ref, conversation: changed))
         XCTAssertThrowsError(try valid.validate(reference: ref, conversation: c, now: Date().addingTimeInterval(86_401)))
-        XCTAssertThrowsError(try event(ref) { $0["dashboardProtocol"] = "foreign" })
+        XCTAssertThrowsError(try event(ref) { $0["assistantProtocol"] = "foreign" })
     }
 
     func testClaimIsAtomicDurableAndOneUseAcrossDifferentEventIDs() throws {
@@ -246,7 +277,7 @@ final class CardInteractionTests: XCTestCase {
         XCTAssertEqual(reloaded.records[job.key]?.state, .unknown)
         XCTAssertNil(try reloaded.reserveExpiredCard(recordID: "original", conversation: c, now: deadline.addingTimeInterval(1)))
         let content = try AICardReply.statusContent(ref, status: "已过期，未执行任务。")
-        XCTAssertTrue(content.contains("已过期")); XCTAssertFalse(content.contains("dws_dashboard_submit"))
+        XCTAssertTrue(content.contains("已过期")); XCTAssertFalse(content.contains("dws_assistant_submit"))
         XCTAssertFalse(content.contains("Countdown"))
     }
 
@@ -261,6 +292,6 @@ final class CardInteractionTests: XCTestCase {
         let update = try Commands.updateCard(ref, content: content, config: config)
         XCTAssertTrue(update.arguments.contains(ref.bizID)); XCTAssertTrue(update.arguments.contains("FINISH"))
         XCTAssertFalse(update.arguments.contains("send-a2ui-card"))
-        XCTAssertFalse(content.contains("createSurface")); XCTAssertFalse(content.contains("dws_dashboard_submit"))
+        XCTAssertFalse(content.contains("createSurface")); XCTAssertFalse(content.contains("dws_assistant_submit"))
     }
 }

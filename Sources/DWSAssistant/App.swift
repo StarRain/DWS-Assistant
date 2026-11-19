@@ -25,7 +25,7 @@ struct AssistantApp: App {
         _model = StateObject(wrappedValue: AssistantModel(preview: preview, directory: directory))
     }
     var body: some Scene {
-        Window(UILocalizer(locale: model.config.language.locale).label("DWS助手"), id: "dashboard") {
+        Window(UILocalizer(locale: model.config.language.locale).label("DWS助手"), id: "assistant") {
             Group {
                 if model.needsSetup { SetupView() }
                 else { AssistantView() }

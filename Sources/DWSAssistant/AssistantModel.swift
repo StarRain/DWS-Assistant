@@ -47,6 +47,7 @@ final class AssistantModel: ObservableObject {
     @Published var selection = "overview"
     @Published var detectedPaths: [String: String] = [:]
     let cliTools = CLIToolsModel()
+    let engineApprovals = EngineApprovalCenter()
     private var engineDetectionID = UUID()
     @Published var loginAtStartup = false
     @Published var storageFailure: String?
@@ -102,7 +103,7 @@ final class AssistantModel: ObservableObject {
         let state = listenerStates[c.id.uuidString] ?? "连接中"
         if state == "监听中", c.kind == .group, c.autoReply, c.trigger != .all,
            listenerStates["at|" + c.profile] != "监听中" { return "等待 @ 通道" }
-        if state == "监听中", c.autoReply, c.replyFormat == .aiCard,
+        if state == "监听中", c.needsCardEvents,
            listenerStates["card|" + c.profile] != "监听中" { return "等待卡片通道" }
         return state
     }
@@ -114,10 +115,13 @@ final class AssistantModel: ObservableObject {
         dataURL = directory ?? AssistantPaths.dataDirectory
         authWatchDirectories = authDirectories ?? DWSLoginWatcher.defaultDirectories
         do {
-            if directory == nil { try AssistantPaths.migrateLegacy(from: AssistantPaths.legacyDirectory, to: dataURL) }
+            if directory == nil {
+                for source in AssistantPaths.legacyDirectories { try AssistantPaths.migrateLegacy(from: source, to: dataURL) }
+            }
             let store = try JSONStore(directory: dataURL)
             instanceLock = Darwin.open(dataURL.appendingPathComponent("instance.lock").path, O_CREAT | O_RDWR, 0o600)
             guard instanceLock >= 0, flock(instanceLock, LOCK_EX | LOCK_NB) == 0 else { throw AssistantError.storage("同一数据目录已有一个面板在运行") }
+            try AssistantPaths.migrateStoredNames(in: dataURL)
             self.store = store
             config = try store.load("config.json", as: AssistantConfig.self) ?? AssistantConfig()
             try Validation.configuration(config)
@@ -454,7 +458,7 @@ final class AssistantModel: ObservableObject {
     }
 
     private func synchronizeCardActions() async throws {
-        let profiles = personalRunning ? Set(conversations.filter { $0.listen && $0.autoReply && $0.replyFormat == .aiCard }.map(\.profile)) : []
+        let profiles = personalRunning ? Set(conversations.filter { $0.listen && $0.needsCardEvents }.map(\.profile)) : []
         for key in Set(listeners.keys).union(retryTasks.keys) where key.hasPrefix("card|") && !profiles.contains(String(key.dropFirst(5))) {
             retryTasks.removeValue(forKey: key)?.cancel()
             listenerStates[key] = "正在停止"; listeners[key]?.cancel()
@@ -462,7 +466,7 @@ final class AssistantModel: ObservableObject {
         for profile in profiles {
             let key = "card|" + profile
             for _ in 0..<100 where listeners[key] != nil && listenerStates[key] == "正在停止" { try await Task.sleep(for: .milliseconds(50)) }
-            if personalRunning && listeners[key] == nil && retryTasks[key] == nil && config.conversations.contains(where: { $0.profile == profile && $0.listen && $0.autoReply && $0.replyFormat == .aiCard }) {
+            if personalRunning && listeners[key] == nil && retryTasks[key] == nil && config.conversations.contains(where: { $0.profile == profile && $0.listen && $0.needsCardEvents }) {
                 startListener(key: key, profile: profile, spec: try Commands.cardActions(profile: profile, config: config), generation: epoch)
             }
         }
@@ -529,7 +533,7 @@ final class AssistantModel: ObservableObject {
         for profile in Set(enabled.filter { $0.kind == .group && $0.autoReply }.map(\.profile)) {
             plans.append(("at|" + profile, profile, try Commands.mentions(profile: profile, config: config)))
         }
-        for profile in Set(enabled.filter { $0.autoReply && $0.replyFormat == .aiCard }.map(\.profile)) {
+        for profile in Set(enabled.filter { $0.needsCardEvents }.map(\.profile)) {
             plans.append(("card|" + profile, profile, try Commands.cardActions(profile: profile, config: config)))
         }
         return plans
@@ -589,6 +593,7 @@ final class AssistantModel: ObservableObject {
 
     func stopPersonal() {
         personalRunning = false; epoch = UUID(); listenerIdentity = nil
+        engineApprovals.cancelAll()
         cardExpiryMonitor?.cancel(); cardExpiryMonitor = nil
         stopping = startupTask != nil || !listeners.isEmpty || !replyTasks.isEmpty || !feedbackTasks.isEmpty
         startupTask?.cancel()
@@ -673,6 +678,7 @@ final class AssistantModel: ObservableObject {
         guard personalRunning, !stopping, storageFailure == nil, profile == self.profile?.id,
               listenerIdentity?.profile == profile, event.time >= startedAt.addingTimeInterval(-5),
               let ledger else { return }
+        if engineApprovals.receive(event, profile: profile, currentSenderID: listenerIdentity?.senderID ?? "") { return }
         // The official personal event stream is scoped to the authenticated
         // user's actions. Do not compare its numeric uid to a corp userId.
         guard let record = ledger.records.values.first(where: {
@@ -692,14 +698,68 @@ final class AssistantModel: ObservableObject {
         } catch { log("「\(c.title)」卡片未处理：\(Redaction.clean(error.localizedDescription))", level: "提示") }
     }
 
+    private func engineApprovalHandler(conversation c: Conversation, conversationID: String, key: String,
+                                       checkCurrent: @escaping @MainActor () throws -> Void) -> EngineApprovalCallbacks? {
+        guard c.agent.engine == .codex, c.agent.permission == .requestApproval else { return nil }
+        var cards: [String: AICardReference] = [:]
+        return EngineApprovalCallbacks(decide: { [weak self] request in
+            guard let self, (try? checkCurrent()) != nil else { return false }
+            self.replyStates[c.id] = "等待原生审批"
+            self.log("「\(c.title)」Codex 正在等待原生审批，请在卡片或助手面板处理")
+            let approved = await self.engineApprovals.wait(request, conversation: c, checkCurrent: checkCurrent) {
+                // The independent approval card cannot be overwritten by the
+                // original task's progress stream. It never becomes an AI form job.
+                do {
+                    for _ in 0..<20 where self.listenerStates["card|" + c.profile] == "连接中" {
+                        try await Task.sleep(for: .milliseconds(50))
+                    }
+                    guard self.listenerStates["card|" + c.profile] == "监听中", !Task.isCancelled else { return nil }
+                    try checkCurrent()
+                    let card = try request.card(conversation: c, conversationID: conversationID)
+                    try self.ledger?.prepareReplyEcho(card.body, conversation: c, key: key)
+                    var target = c; target.replyFormat = .aiCard
+                    var spec = try Commands.send(target, text: card.body, key: "engine-approval|" + request.token, config: self.config, card: card)
+                    spec.timeout = 8
+                    let receipt = try await ReplyExecution.command(spec, timeout: ReplyTimeout.cardUpdate)
+                    let created = try card.reference(from: receipt, conversation: c)
+                    cards[request.token] = created
+                    self.engineApprovals.bindCard(created, token: request.token)
+                    try self.ledger?.rememberSentMessages(receipt, conversation: c, key: key)
+                    return created
+                } catch {
+                    if !Task.isCancelled { self.log("「\(c.title)」原生审批卡片未确认送达，请在助手面板处理；不会重复发送", level: "提示") }
+                    return nil
+                }
+            }
+            return approved && !Task.isCancelled && request.deadline > Date() && (try? checkCurrent()) != nil
+        }, didRespond: { [weak self] request, approved in
+            guard let self else { return }
+            let reference = cards.removeValue(forKey: request.token)
+            guard !Task.isCancelled, (try? checkCurrent()) != nil else { return }
+            self.replyStates[c.id] = "AI 生成中"
+            self.log(approved ? "「\(c.title)」本次原生审批已批准" : "「\(c.title)」本次原生审批已拒绝或失效")
+            if let reference {
+                do {
+                    let content = try AICardReply.statusContent(reference, status: approved ? "批准决定已提交，执行结果请查看任务回复。" : "已拒绝本次请求。")
+                    var update = try Commands.updateCard(reference, content: content, config: self.config); update.timeout = 8
+                    let result = try await ReplyExecution.command(update, timeout: ReplyTimeout.cardUpdate)
+                    guard try AICardReply.updateAccepted(result, reference: reference) else { throw AssistantError.command("审批状态更新待确认") }
+                } catch {
+                    if !Task.isCancelled { self.log("「\(c.title)」审批卡片状态更新待确认，不会重复发送", level: "提示") }
+                }
+            }
+        })
+    }
+
     private func processCardAction(_ job: CardActionJob, conversation c: Conversation, receivedAt: Date) {
         let id = c.id, generation = epoch
         replyTasks[id] = Task { [weak self] in
             guard let self else { return }
             // reserveCardAction already validates the submission deadline.
-            // Once accepted, execution uses the engine timeout, not the old
+            // Once accepted, execution uses the conversation execution limit, not the old
             // time limit for choosing an option on the form.
             let expiring = job.action == "expire"
+            let expiryReason = ReplyTimeout.waiting(for: job.reference.interaction)
             var processingAccepted = false, resultAttempted = false, networkAttempted = false
             var liveProgress: CardProgressUpdates?
             defer {
@@ -718,16 +778,16 @@ final class AssistantModel: ObservableObject {
                 try checkCurrent()
                 let cancelling = job.action == "cancel"
                 self.replyStates[id] = expiring ? "关闭过期卡片中" : cancelling ? "取消卡片中" : "处理卡片中"
-                let content = try AICardReply.statusContent(job.reference, status: expiring ? "已过期，未执行任务。请发送新消息重新发起。" : cancelling ? "已取消，未执行任务。" : "处理中，请稍候…")
+                let content = try AICardReply.statusContent(job.reference, status: expiring ? expiryReason.message : cancelling ? "已取消，未执行任务。" : "处理中，请稍候…")
                 let update = try Commands.updateCard(job.reference, content: content, processing: !cancelling && !expiring, config: self.config)
                 try self.ledger?.mark(job.key, .sending); networkAttempted = true
-                let receipt = try await ProcessRunner.run(update)
+                let receipt = try await ReplyExecution.command(update, timeout: ReplyTimeout.cardUpdate)
                 guard try AICardReply.updateAccepted(receipt, reference: job.reference) else { throw AssistantError.command("卡片更新结果待确认，未启动任务") }
                 if cancelling || expiring {
                     var reference = job.reference; reference.interaction = nil; reference.finishContent = content
                     try self.ledger?.attachCard(reference, to: job.key)
                     try self.ledger?.mark(job.key, .accepted)
-                    self.log("「\(c.title)」卡片已\(expiring ? "过期" : "取消")，未启动 AI")
+                    self.log(expiring ? expiryReason.logMessage(conversation: c.title) : "「\(c.title)」卡片已取消，未启动 AI")
                     return
                 }
                 processingAccepted = true
@@ -736,15 +796,13 @@ final class AssistantModel: ObservableObject {
                 self.replyStates[id] = "AI 生成中"
                 let start = Date()
                 let prompt = try job.prompt(context: c.agent.engine == .gemini ? self.context[id, default: []] : [])
-                var spec = try Commands.officialAgent(c.agent, prompt: prompt, route: c.routingKey,
-                    bridgePath: self.nativeBridgePath(), stateDirectory: self.dataURL.appendingPathComponent("agent-sessions").path, config: self.config, sessionTitle: c.defaultCodexSessionTitle, reportProgress: true)
-                let enginePath = spec.environment?["PATH"] ?? ""
-                spec.environment?["PATH"] = self.dataURL.appendingPathComponent("bin").path + ":" + enginePath
+                let spec = try self.agentCommand(for: c, prompt: prompt, conversationID: job.reference.interaction?.conversationID ?? "", reportProgress: true, senderID: job.verifiedOperatorID, accountSenderID: self.listenerIdentity?.senderID, cardSubmission: true)
                 let updates = CardProgressUpdates(reference: job.reference, config: self.config, checkCurrent: checkCurrent)
                 liveProgress = updates
-                let result = try await updates.run(spec)
+                let result = try await ReplyExecution.agent(spec, settings: c.agent, progress: updates,
+                    approval: self.engineApprovalHandler(conversation: c, conversationID: job.reference.interaction?.conversationID ?? "", key: job.key, checkCurrent: checkCurrent))
                 self.recordAgentDiagnostics(result, conversation: c)
-                let answer = try Commands.finalAnswer(result, engine: c.agent.engine)
+                let answer = try Commands.finalAnswer(result, engine: c.agent.engine, executionTimeout: c.agent.timeout)
                 let generationSeconds = Date().timeIntervalSince(start)
                 try checkCurrent()
                 let card = try AICardReply(text: answer, key: job.key, conversation: c,
@@ -754,7 +812,7 @@ final class AssistantModel: ObservableObject {
                 try self.ledger?.prepareReplyEcho(card.body, conversation: c, key: job.key)
                 try self.ledger?.mark(job.key, .sending)
                 self.replyStates[id] = "更新卡片中"; resultAttempted = true
-                let final = try await ProcessRunner.run(Commands.updateCard(reference, content: card.replacementContent, config: self.config))
+                let final = try await ReplyExecution.command(Commands.updateCard(reference, content: card.replacementContent, config: self.config), timeout: ReplyTimeout.cardUpdate)
                 guard try AICardReply.updateAccepted(final, reference: reference) else { throw AssistantError.command("卡片结果待确认，不会重新执行") }
                 try self.ledger?.mark(job.key, .accepted)
                 if card.interaction != nil { self.startCardExpiryMonitor(generation: generation) }
@@ -771,7 +829,7 @@ final class AssistantModel: ObservableObject {
                 if processingAccepted && !resultAttempted && !Task.isCancelled && self.personalRunning && self.epoch == generation,
                    self.config.conversations.first(where: { $0.id == id }) == c {
                     do {
-                        let content = try AICardReply.statusContent(job.reference, status: "处理失败，未自动重试。请查看面板日志或发送新消息。", progress: liveProgress?.snapshot ?? .init())
+                        let content = try AICardReply.statusContent(job.reference, status: (error as? ReplyTimeout)?.message ?? "处理失败，未自动重试。请查看面板日志或发送新消息。", progress: liveProgress?.snapshot ?? .init())
                         let result = try await ProcessRunner.run(Commands.updateCard(job.reference, content: content, config: self.config))
                         if try AICardReply.updateAccepted(result, reference: job.reference) {
                             var reference = job.reference; reference.interaction = nil; reference.finishContent = content
@@ -781,7 +839,7 @@ final class AssistantModel: ObservableObject {
                 }
                 do { try self.ledger?.mark(job.key, state) }
                 catch { self.storageFailure = "卡片交互记录保存失败"; self.stopPersonal() }
-                self.log("「\(c.title)」卡片处理已停止：\(Redaction.clean(error.localizedDescription))", level: "提示")
+                self.log((error as? ReplyTimeout)?.logMessage(conversation: c.title) ?? "「\(c.title)」卡片处理已停止：\(Redaction.clean(error.localizedDescription))", level: "提示")
             }
         }
     }
@@ -845,7 +903,7 @@ final class AssistantModel: ObservableObject {
                     try self.ledger?.mark(key, .sending)
                     self.replyStates[id] = "创建处理卡片"; attemptedSend = true
                     let sendStart = Date()
-                    let receipt = try await ProcessRunner.run(Commands.send(c, text: placeholder.body, key: key, config: self.config, card: placeholder))
+                    let receipt = try await ReplyExecution.command(Commands.send(c, text: placeholder.body, key: key, config: self.config, card: placeholder), timeout: ReplyTimeout.messageDelivery)
                     sendSeconds += Date().timeIntervalSince(sendStart)
                     let reference = try placeholder.reference(from: receipt, conversation: c)
                     try self.ledger?.attachCard(reference, to: key)
@@ -859,13 +917,13 @@ final class AssistantModel: ObservableObject {
                 var images: [String] = []
                 if !event.imageMessageIDs.isEmpty {
                     self.replyStates[id] = "读取图片中"
-                    let details = try await ProcessRunner.run(Commands.imageDetails(event, profile: c.profile, config: self.config))
+                    let details = try await ReplyExecution.command(Commands.imageDetails(event, profile: c.profile, config: self.config), timeout: ReplyTimeout.imageRead)
                     let resources = try IncomingImages.resources(details, event: event)
                     guard let cache = self.imageCache else { throw AssistantError.storage("图片缓存不可用") }
                     let lease = try cache.reserve(count: resources.count); imageLease = lease
                     for (index, resource) in resources.enumerated() {
                         try Task.checkCancellation()
-                        let download = try await ProcessRunner.run(Commands.downloadImage(resource, profile: c.profile, directory: lease.directory, index: index, config: self.config))
+                        let download = try await ReplyExecution.command(Commands.downloadImage(resource, profile: c.profile, directory: lease.directory, index: index, config: self.config), timeout: ReplyTimeout.imageRead)
                         guard download.status == 0 else { throw AssistantError.command("图片下载失败或超过 8 MB 限制") }
                         images.append(try cache.image(from: download, resource: resource, index: index, lease: lease))
                     }
@@ -874,7 +932,7 @@ final class AssistantModel: ObservableObject {
                         let stage = try AICardReply(text: "图片已读取，AI 正在处理…", key: key, surfaceID: reference.surfaceID, processing: true)
                         try self.ledger?.prepareReplyEcho(stage.body, conversation: c, key: key)
                         try self.ledger?.mark(key, .sending); updateInFlight = true
-                        let receipt = try await ProcessRunner.run(Commands.updateCard(reference, content: stage.replacementContent, processing: true, config: self.config))
+                        let receipt = try await ReplyExecution.command(Commands.updateCard(reference, content: stage.replacementContent, processing: true, config: self.config), timeout: ReplyTimeout.cardUpdate)
                         guard try AICardReply.updateAccepted(receipt, reference: reference) else { throw AssistantError.command("处理状态更新待确认，未启动 AI") }
                         updateInFlight = false
                         try self.ledger?.mark(key, .generating)
@@ -884,17 +942,15 @@ final class AssistantModel: ObservableObject {
                 self.replyStates[id] = "AI 生成中"
                 let generationStart = Date()
                 let prompt = EventRouting.prompt(event: event, context: c.agent.engine == .gemini ? self.context[id, default: []] : [], format: c.replyFormat, images: images)
-                var spec = try Commands.officialAgent(c.agent, prompt: prompt, route: c.routingKey, bridgePath: self.nativeBridgePath(), stateDirectory: self.dataURL.appendingPathComponent("agent-sessions").path, config: self.config, images: images, sessionTitle: c.defaultCodexSessionTitle, reportProgress: c.replyFormat == .aiCard)
-                let oldPath = spec.environment?["PATH"] ?? ""
-                spec.environment?["PATH"] = self.dataURL.appendingPathComponent("bin").path + ":" + oldPath
-                let result: CommandResult
+                let spec = try self.agentCommand(for: c, prompt: prompt, conversationID: event.conversationID, images: images, reportProgress: c.replyFormat == .aiCard, senderID: event.senderID, accountSenderID: currentSenderID)
                 if let reference = progressCard {
                     let updates = CardProgressUpdates(reference: reference, config: self.config, checkCurrent: checkCurrent)
                     liveProgress = updates
-                    result = try await updates.run(spec)
-                } else { result = try await ProcessRunner.run(spec) }
+                }
+                let result = try await ReplyExecution.agent(spec, settings: c.agent, progress: liveProgress,
+                    approval: self.engineApprovalHandler(conversation: c, conversationID: event.conversationID, key: key, checkCurrent: checkCurrent))
                 self.recordAgentDiagnostics(result, conversation: c)
-                let answer = try Commands.finalAnswer(result, engine: c.agent.engine)
+                let answer = try Commands.finalAnswer(result, engine: c.agent.engine, executionTimeout: c.agent.timeout)
                 let generationSeconds = Date().timeIntervalSince(generationStart)
                 try checkCurrent()
                 let card = c.replyFormat == .aiCard ? try AICardReply(text: answer, key: key, conversation: c, conversationID: event.conversationID, surfaceID: progressCard?.surfaceID, progress: liveProgress?.snapshot ?? .init()) : nil
@@ -912,7 +968,7 @@ final class AssistantModel: ObservableObject {
                     try self.ledger?.prepareReplyEcho(card.body, conversation: c, key: key)
                     try self.ledger?.mark(key, .sending); updateInFlight = true
                     self.replyStates[id] = "更新卡片中"
-                    let update = try await ProcessRunner.run(Commands.updateCard(reference, content: card.replacementContent, config: self.config))
+                    let update = try await ReplyExecution.command(Commands.updateCard(reference, content: card.replacementContent, config: self.config), timeout: ReplyTimeout.cardUpdate)
                     cardAccepted = try AICardReply.updateAccepted(update, reference: reference)
                     guard cardAccepted else { throw AssistantError.command("卡片结果更新待确认，不会重复发送") }
                     updateInFlight = false
@@ -921,7 +977,7 @@ final class AssistantModel: ObservableObject {
                     try self.ledger?.mark(key, .sending)
                     try self.ledger?.prepareReplyEcho(answer, conversation: c, key: key)
                     attemptedSend = true; self.replyStates[id] = "发送中"
-                    let receipt = try await ProcessRunner.run(send)
+                    let receipt = try await ReplyExecution.command(send, timeout: ReplyTimeout.messageDelivery)
                     try self.ledger?.rememberSentMessages(receipt, conversation: c, key: key)
                     confirmed = JSONOutput.delivered(receipt)
                 }
@@ -953,7 +1009,7 @@ final class AssistantModel: ObservableObject {
                    self.personalRunning, self.epoch == generation, self.accountOK, self.profile?.id == c.profile,
                    self.config.conversations.first(where: { $0.id == id }) == c {
                     do {
-                        let content = try AICardReply.statusContent(reference, status: "处理未完成，请查看面板日志。不会自动重试。", progress: liveProgress?.snapshot ?? .init())
+                        let content = try AICardReply.statusContent(reference, status: (error as? ReplyTimeout)?.message ?? "处理未完成，请查看面板日志。不会自动重试。", progress: liveProgress?.snapshot ?? .init())
                         let result = try await ProcessRunner.run(Commands.updateCard(reference, content: content, config: self.config))
                         if try AICardReply.updateAccepted(result, reference: reference) {
                             var closed = reference; closed.interaction = nil; closed.finishContent = content
@@ -963,7 +1019,7 @@ final class AssistantModel: ObservableObject {
                 }
                 do { try self.ledger?.mark(key, state) }
                 catch { self.storageFailure = "投递记录保存失败"; self.stopPersonal() }
-                self.log("「\(c.title)」\(state == .unknown ? "投递未确认" : "回复已停止")：\(error.localizedDescription)", level: "提示")
+                self.log((error as? ReplyTimeout)?.logMessage(conversation: c.title) ?? "「\(c.title)」\(state == .unknown ? "投递未确认" : "回复已停止")：\(error.localizedDescription)", level: "提示")
             }
         }
     }

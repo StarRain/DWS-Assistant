@@ -3,7 +3,7 @@ import XCTest
 
 @MainActor final class ImageTests: XCTestCase {
     private func directory() throws -> URL {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("dashboard-images-" + UUID().uuidString)
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("assistant-images-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
         return dir

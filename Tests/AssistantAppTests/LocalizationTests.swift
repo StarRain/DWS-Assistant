@@ -38,6 +38,24 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(english.diagnostic("请填写「用户规则」的规则内容"), "Enter content for “用户规则”")
     }
 
+    func testTimeoutDiagnosticsTranslateCauseAndKeepNameAndLimit() {
+        let title = "My chat {1}"
+        let reasons: [ReplyTimeout] = [.executionLimit(seconds: 180), .engineReported(engine: .codex),
+            .resultWait(seconds: 190), .messageDelivery(seconds: 45), .cardUpdate(seconds: 8),
+            .imageRead(seconds: 45), .cardWaiting(seconds: 60), .cardWaiting(seconds: nil)]
+        for reason in reasons {
+            let source = reason.logMessage(conversation: title)
+            let translated = english.diagnostic(source)
+            XCTAssertTrue(translated.hasPrefix("“\(title)”: "))
+            XCTAssertNil(translated.range(of: #"[\u4E00-\u9FFF]"#, options: .regularExpression), translated)
+            XCTAssertEqual(chinese.diagnostic(source), source)
+        }
+        let source = ReplyTimeout.executionLimit(seconds: 180).logMessage(conversation: title)
+        let translated = english.diagnostic(source)
+        XCTAssertTrue(translated.contains("180-second limit configured for this chat"))
+        XCTAssertTrue(translated.contains("AI reply settings → Execution timeout"))
+    }
+
     func testCatalogPlaceholdersAndAllOptionLabelsAreTranslated() throws {
         let placeholders = try NSRegularExpression(pattern: #"\{\d+\}"#)
         func tokens(_ text: String) -> [String] {
@@ -51,6 +69,7 @@ final class LocalizationTests: XCTestCase {
         }
         let labels = ReplyTrigger.allCases.flatMap { [$0.title, $0.detail] }
             + ReplyFormat.allCases.map(\.title) + ExecutionPermission.allCases.map(\.title)
+            + Engine.allCases.flatMap { engine in ExecutionPermission.options(for: engine).flatMap { [$0.title(for: engine), $0.detail(for: engine)] } }
             + AppAppearance.allCases.map(\.title)
         for label in labels where label != "Markdown" {
             XCTAssertNotEqual(english.label(label), label, label)

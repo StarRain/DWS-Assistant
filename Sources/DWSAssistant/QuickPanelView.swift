@@ -22,6 +22,7 @@ struct QuickPanelView: AssistantLocalizedView {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            EngineApprovalShortcut(center: model.engineApprovals) { showPage("overview") }
             HStack(spacing: 10) {
                 Image(nsImage: AssistantBrand.appIcon).resizable().frame(width: 34, height: 34)
                     .accessibilityHidden(true)
@@ -138,7 +139,7 @@ struct QuickPanelView: AssistantLocalizedView {
         model.selection = page
         dismiss()
         prepareToOpenMainWindow()
-        openWindow(id: "dashboard")
+        openWindow(id: "assistant")
         NSApp.activate(ignoringOtherApps: true)
     }
 }

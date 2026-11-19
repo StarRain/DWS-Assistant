@@ -119,7 +119,7 @@ public enum EngineMetadataReader {
             let quotedLog = String(decoding: try pathEncoder.encode(cache.appendingPathComponent("logs").path), as: UTF8.self)
             let session = MetadataConnection(CommandSpec(executable: executable, arguments: ["-c", "log_dir=" + quotedLog, "app-server"], directory: workdir, environment: environment, timeout: 20, streaming: true))
             defer { session.close() }
-            _ = try await session.query(["id": 1, "method": "initialize", "params": ["clientInfo": ["name": "dws_dashboard_metadata", "version": "1.0.0"], "capabilities": [:]]], id: "1")
+            _ = try await session.query(["id": 1, "method": "initialize", "params": ["clientInfo": ["name": "dws_assistant_metadata", "version": "1.0.0"], "capabilities": [:]]], id: "1")
             try session.notify(["method": "initialized"])
             let configResult = try await session.query(["id": 2, "method": "config/read", "params": ["includeLayers": false, "cwd": workdir]], id: "2")
             var models: [[String: Any]] = [], cursor: String?, seen = Set<String>()

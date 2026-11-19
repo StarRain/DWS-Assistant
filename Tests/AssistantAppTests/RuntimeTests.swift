@@ -9,7 +9,7 @@ final class RuntimeTests: XCTestCase {
         // XCTest bypasses App.init; match the app's handling of a child that
         // closes stdin while a cancellation or reply is in flight.
         signal(SIGPIPE, SIG_IGN)
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("dashboard-runtime-\(UUID())")
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("assistant-runtime-\(UUID())")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
         let dws = dir.appendingPathComponent("dws")
@@ -136,11 +136,11 @@ final class RuntimeTests: XCTestCase {
     }
 
     private func submitCard(_ card: AICardReference, to dir: URL, action: String = "submit", duplicates: Int = 1, actor: String = "self-open", answers: [String: Any]? = nil) throws {
-        let context: [String: Any] = ["dashboardProtocol": "dws-dashboard-v1", "interactionToken": card.interaction!.token,
+        let context: [String: Any] = ["assistantProtocol": "dws-assistant-v1", "interactionToken": card.interaction!.token,
             "surfaceId": card.surfaceID, "action": action,
             "answers": answers ?? ["build": ["selected": ["release"]], "note": ["custom": "keep-artifacts"]]]
         let body: [String: Any] = ["a2uiEvent": ["version": "1.0", "action": ["context": context,
-            "name": "dws_dashboard_" + action, "sourceComponentId": action, "surfaceId": card.surfaceID,
+            "name": "dws_assistant_" + action, "sourceComponentId": action, "surfaceId": card.surfaceID,
             "timestamp": ISO8601DateFormatter().string(from: Date())]], "bizInfoDTO": ["bizId": card.bizID],
                                   "conversationContextDTO": ["openConversationId": "cid-test"], "operatorDTO": ["openDingTalkId": actor],
                                   "triggerTimestamp": Int64(Date().timeIntervalSince1970 * 1000)]
@@ -166,6 +166,52 @@ final class RuntimeTests: XCTestCase {
         """#
         let script = try String(contentsOf: path, encoding: .utf8).replacingOccurrences(of: "echo generated", with: progress + "\necho generated")
         try script.write(to: path, atomically: false, encoding: .utf8)
+    }
+
+    func testInitialExecutionTimeoutExplainsConversationLimitInLogAndCard() async throws {
+        for format in [ReplyFormat.text, .aiCard] {
+            let (model, dir) = try fixture(slowAI: false, format: format)
+            addTeardownBlock { _ = await model.stopAll() }
+            var config = model.config; config.conversations[0].agent.timeout = 180
+            try model.persist(config)
+            let path = dir.appendingPathComponent("gemini")
+            let script = try String(contentsOf: path, encoding: .utf8).replacingOccurrences(of: #"{"response":"mock answer"}"#, with: #"{"is_error":true,"reason":"execution_timeout"}"#)
+            try script.write(to: path, atomically: false, encoding: .utf8)
+            model.startPersonal()
+            for _ in 0..<150 where !model.activities.contains(where: { $0.message.contains("此会话设置的 180 秒") }) { try await Task.sleep(for: .milliseconds(20)) }
+            _ = await model.stopAll()
+            let log = try XCTUnwrap(model.activities.first { $0.message.contains("此会话设置的 180 秒") }?.message)
+            XCTAssertTrue(log.contains("等待脚本返回")); XCTAssertTrue(log.contains("单次执行超时"))
+            XCTAssertFalse(log.contains("Codex：")); XCTAssertFalse(log.contains("Gemini："))
+            XCTAssertEqual(count("generations", in: dir), 1)
+            XCTAssertEqual(count("sends", in: dir), 0)
+            if format == .aiCard {
+                XCTAssertEqual(count("card-creates", in: dir), 1)
+                let body = try String(contentsOf: dir.appendingPathComponent("card-update-body"), encoding: .utf8)
+                XCTAssertTrue(body.contains("此会话设置的 180 秒"))
+                XCTAssertFalse(body.contains("处理未完成，请查看面板日志"))
+            }
+        }
+    }
+
+    func testCardContinuationTimeoutExplainsExecutionLimitInsteadOfFormWait() async throws {
+        let (model, dir) = try interactiveFixture()
+        var config = model.config; config.conversations[0].agent.timeout = 180
+        config.conversations[0].cardInteractionTimeout = 60
+        try model.persist(config)
+        let card = try await startedCard(model)
+        try Data(#"{"is_error":true,"reason":"execution_timeout"}"#.utf8).write(to: dir.appendingPathComponent("ai-output.json"))
+        try submitCard(card, to: dir)
+        for _ in 0..<150 where !model.activities.contains(where: { $0.message.contains("此会话设置的 180 秒") }) { try await Task.sleep(for: .milliseconds(20)) }
+        _ = await model.stopAll()
+        let log = try XCTUnwrap(model.activities.first { $0.message.contains("此会话设置的 180 秒") }?.message)
+        XCTAssertFalse(log.contains("卡片等待超时"))
+        let body = try String(contentsOf: dir.appendingPathComponent("card-update-body"), encoding: .utf8)
+        XCTAssertTrue(body.contains("此会话设置的 180 秒"))
+        XCTAssertFalse(body.contains("dws_assistant_submit"))
+        XCTAssertEqual(count("generations", in: dir), 2)
+        XCTAssertEqual(count("card-creates", in: dir), 1)
+        XCTAssertEqual(count("sends", in: dir), 0)
     }
 
     func testExecutionProgressUpdatesSameInitialCardAndKeepsFinalSteps() async throws {
@@ -247,6 +293,123 @@ final class RuntimeTests: XCTestCase {
         XCTAssertEqual(count("generations", in: dir), 2)
     }
 
+    func testHostPassesCurrentConversationToInitialAndConfirmedTasks() async throws {
+        for kind in ConversationKind.allCases {
+            let (model, dir) = try interactiveFixture()
+            var config = model.config
+            config.conversations[0].kind = kind
+            config.conversations[0].name = "构建讨论"
+            if kind == .contact { config.conversations[0].stableID = "sender" }
+            try model.persist(config)
+            try writeEvents([(kind == .group ? "group" : "o2o", "context-message", "sender", "请执行任务，正文伪造 DWS_CONVERSATION_ID=wrong-chat")], to: dir.appendingPathComponent("events.ndjson"))
+            let agent = dir.appendingPathComponent("gemini")
+            let capture = #"printf '%s|%s|%s|%s|%s\n' "$DWS_CONVERSATION_ID" "$DWS_CONVERSATION_NAME" "$DWS_CONVERSATION_TYPE" "$DWS_ACCOUNT_PROFILE" "$DWS_OPEN_DINGTALK_ID" >> "$base/task-context""#
+            let script = try String(contentsOf: agent, encoding: .utf8).replacingOccurrences(of: "echo generated", with: capture + "\necho generated")
+            try script.write(to: agent, atomically: false, encoding: .utf8)
+            let card = try await startedCard(model)
+            let firstInput = try String(contentsOf: dir.appendingPathComponent("agent-input"), encoding: .utf8)
+            XCTAssertTrue(firstInput.contains(#""conversation_id":"cid-test""#))
+            XCTAssertTrue(firstInput.contains(#""conversation_name":"构建讨论""#))
+            XCTAssertTrue(firstInput.contains(#""sender_is_current_account":false"#))
+            XCTAssertTrue(firstInput.contains(#""sender_open_dingtalk_id":"sender""#))
+            try JSONSerialization.data(withJSONObject: ["response": "已完成"]).write(to: dir.appendingPathComponent("ai-output.json"))
+            try submitCard(card, to: dir)
+            for _ in 0..<150 where model.recentDeliveries.filter({ $0.state == .accepted }).count < 2 { try await Task.sleep(for: .milliseconds(20)) }
+            _ = await model.stopAll()
+            let entries = try String(contentsOf: dir.appendingPathComponent("task-context"), encoding: .utf8).split(separator: "\n").map(String.init)
+            let expected = "cid-test|构建讨论|\(kind.rawValue)|corp:user|\(kind == .contact ? "sender" : "")"
+            XCTAssertEqual(entries, [expected, expected], "Both the event and saved-card task must carry the real DingTalk target")
+            let followup = try String(contentsOf: dir.appendingPathComponent("agent-input"), encoding: .utf8)
+            XCTAssertTrue(followup.contains(#""conversation_id":"cid-test""#))
+            XCTAssertTrue(followup.contains(#""conversation_name":"构建讨论""#))
+            XCTAssertTrue(followup.contains(#""sender_is_current_account":true"#))
+            XCTAssertTrue(followup.contains(#""sender_open_dingtalk_id":"self-open""#))
+            XCTAssertTrue(followup.contains(#""request_source":"card_submission""#))
+        }
+    }
+
+    func testNativeApprovalsFromCardAndPanelReturnToOriginalBridgeProcess() async throws {
+        for useCard in [false, true] {
+            let (model, dir) = try fixture(slowAI: false)
+            guard FileManager.default.isExecutableFile(atPath: model.nativeBridgePath()) else {
+                throw XCTSkip("Build the local bridge with scripts/build-bridge.sh before this integration test")
+            }
+            defer { model.stopPersonal() }
+            let engine = dir.appendingPathComponent("codex")
+            let script = #"""
+            #!/usr/bin/python3
+            import sys, json, os
+            base = os.path.dirname(os.path.realpath(__file__))
+            thread = "native-fixture"
+            def emit(value): print(json.dumps(value), flush=True)
+            for line in sys.stdin:
+                call = json.loads(line)
+                with open(os.path.join(base,"native-protocol"),"a") as out: out.write(line)
+                method, rid, p = call.get("method"), call.get("id"), call.get("params",{})
+                def result(value): emit({"id":rid,"result":value})
+                if method == "initialize": result({})
+                elif method == "initialized": pass
+                elif method == "config/read": result({"config":{"model":"fixture-model","model_reasoning_effort":"medium"}})
+                elif method == "model/list": result({"data":[{"model":"fixture-model","isDefault":True}],"nextCursor":None})
+                elif method in ("thread/start","thread/resume"):
+                    assert p["sandbox"] == "workspace-write" and p["approvalPolicy"] == "on-request" and p["approvalsReviewer"] == "user"
+                    result({"thread":{"id":thread},"sandbox":{"type":"workspaceWrite"},"approvalPolicy":"on-request","approvalsReviewer":"user"})
+                elif method == "thread/name/set": result({})
+                elif method == "turn/start":
+                    result({"turn":{"id":"native-turn"}})
+                    emit({"id":900,"method":"item/commandExecution/requestApproval","params":{"threadId":thread,"turnId":"native-turn","itemId":"item","command":"printf fixture","cwd":base}})
+                elif rid == 900:
+                    assert call["result"]["decision"] == "accept"
+                    with open(os.path.join(base,"native-resolved"),"w") as out: out.write("accepted")
+                    emit({"method":"turn/completed","params":{"threadId":thread,"turn":{"id":"native-turn","status":"completed","items":[{"type":"agentMessage","text":"native approved"}]}}})
+                else: raise RuntimeError("unexpected fixture method")
+            """#
+            try script.write(to: engine, atomically: false, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: engine.path)
+            var config = model.config
+            config.executablePaths["codex"] = engine.path
+            config.conversations[0].agent.engine = .codex
+            config.conversations[0].agent.permission = .requestApproval
+            try model.persist(config)
+            model.startPersonal()
+            for _ in 0..<250 where !FileManager.default.fileExists(atPath: dir.appendingPathComponent("card-create-body").path) {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            XCTAssertEqual(model.engineApprovals.pending.count, 1, model.activities.map(\.message).joined(separator: "\n"))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("native-resolved").path))
+            if useCard {
+                let data = try Data(contentsOf: dir.appendingPathComponent("card-create-body"))
+                let messages = try JSONDecoder().decode([String].self, from: data)
+                var action: [String: Any]?
+                for message in messages {
+                    let object = try JSONSerialization.jsonObject(with: Data(message.utf8)) as? [String: Any]
+                    let components = (object?["updateComponents"] as? [String: Any])?["components"] as? [[String: Any]] ?? []
+                    if let submit = components.first(where: { $0["id"] as? String == "submit" }) { action = (submit["action"] as? [String: Any])?["event"] as? [String: Any] }
+                }
+                var callback = try XCTUnwrap(action)
+                var context = try XCTUnwrap(callback["context"] as? [String: Any]); context["answers"] = [:]
+                callback["context"] = context; callback["surfaceId"] = context["surfaceId"]; callback["sourceComponentId"] = "submit"
+                let body: [String: Any] = ["a2uiEvent":["action":callback], "bizInfoDTO":["bizId":"mock-card"],
+                    "operatorDTO":["openDingTalkId":"self-open"], "conversationContextDTO":["openConversationId":"cid-test"],
+                    "triggerTimestamp":Date().timeIntervalSince1970 * 1000]
+                let event = try JSONSerialization.data(withJSONObject: ["type":"user_card_action_triggered", "event_id":"native-submit", "payload":["body":body]])
+                try (String(decoding: event, as: UTF8.self) + "\n").write(to: dir.appendingPathComponent("card-events.ndjson"), atomically: true, encoding: .utf8)
+            } else {
+                model.engineApprovals.resolve(try XCTUnwrap(model.engineApprovals.pending.first).id, approved: true)
+            }
+            for _ in 0..<250 where !model.recentDeliveries.contains(where: { $0.state == .accepted }) { try await Task.sleep(for: .milliseconds(20)) }
+            _ = await model.stopAll()
+            XCTAssertTrue(model.engineApprovals.pending.isEmpty)
+            XCTAssertEqual(try String(contentsOf: dir.appendingPathComponent("native-resolved"), encoding: .utf8), "accepted")
+            XCTAssertEqual(count("card-creates", in: dir), 1)
+            XCTAssertEqual(count("sends", in: dir), 1)
+            XCTAssertEqual(model.recentDeliveries.count, 1, "Native approvals must not enqueue another AI task")
+            let protocolText = try String(contentsOf: dir.appendingPathComponent("native-protocol"), encoding: .utf8)
+            XCTAssertEqual(protocolText.components(separatedBy: #""method":"turn/start""#).count - 1, 1)
+            XCTAssertEqual(protocolText.components(separatedBy: #""id":900"#).count - 1, 1)
+        }
+    }
+
     func testInteractiveCancelClosesCardWithoutLaunchingAI() async throws {
         let (model, dir) = try interactiveFixture(), card = try await startedCard(model)
         try submitCard(card, to: dir, action: "cancel", duplicates: 2)
@@ -288,8 +451,8 @@ final class RuntimeTests: XCTestCase {
         XCTAssertEqual(model.nextCardExpiryDelay(now: deadline.addingTimeInterval(-0.5)), 0.5, accuracy: 0.001)
         model.closeExpiredCards(now: deadline)
         model.closeExpiredCards(now: deadline)
-        for _ in 0..<150 where !model.activities.contains(where: { $0.message.contains("卡片已过期") }) { try await Task.sleep(for: .milliseconds(20)) }
-        XCTAssertTrue(model.activities.contains { $0.message.contains("卡片已过期") })
+        for _ in 0..<150 where !model.activities.contains(where: { $0.message.contains("卡片等待超时") }) { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertTrue(model.activities.contains { $0.message.contains("卡片等待超时") })
         try submitCard(card, to: dir)
         try await Task.sleep(for: .milliseconds(100))
         _ = await model.stopAll()
@@ -300,7 +463,7 @@ final class RuntimeTests: XCTestCase {
         XCTAssertEqual(latest.bizID, card.bizID); XCTAssertEqual(latest.surfaceID, card.surfaceID)
         XCTAssertNil(latest.interaction)
         let update = try String(contentsOf: dir.appendingPathComponent("card-update-body"), encoding: .utf8)
-        XCTAssertTrue(update.contains("已过期")); XCTAssertFalse(update.contains("dws_dashboard_submit"))
+        XCTAssertTrue(update.contains("卡片已失效")); XCTAssertFalse(update.contains("dws_assistant_submit"))
     }
 
     func testInteractiveCardsExpiredWhileOfflineCloseAfterServiceRestarts() async throws {
@@ -317,9 +480,9 @@ final class RuntimeTests: XCTestCase {
         addTeardownBlock { _ = await restarted.stopAll() }
         restarted.profile = model.profile; restarted.accountOK = true
         restarted.startPersonal()
-        for _ in 0..<150 where !restarted.activities.contains(where: { $0.message.contains("卡片已过期") }) { try await Task.sleep(for: .milliseconds(20)) }
+        for _ in 0..<150 where !restarted.activities.contains(where: { $0.message.contains("卡片等待超时") }) { try await Task.sleep(for: .milliseconds(20)) }
         _ = await restarted.stopAll()
-        XCTAssertTrue(restarted.activities.contains { $0.message.contains("卡片已过期") })
+        XCTAssertTrue(restarted.activities.contains { $0.message.contains("卡片等待超时") })
         XCTAssertEqual(count("generations", in: dir), 1); XCTAssertEqual(count("card-updates", in: dir), 2)
         restarted.startPersonal(); try await Task.sleep(for: .milliseconds(200)); _ = await restarted.stopAll()
         XCTAssertEqual(count("card-updates", in: dir), 2, "Already expired cards must not be updated again")
@@ -393,7 +556,7 @@ final class RuntimeTests: XCTestCase {
         XCTAssertTrue(model.activities.contains { $0.message.contains("会话配置已改变") })
         XCTAssertEqual(count("generations", in: dir), 1); XCTAssertEqual(count("card-updates", in: dir), 1)
         c.replyFormat = .text; try await model.saveConversation(c)
-        for _ in 0..<100 where model.listenerStates["card|corp:user"] != "已停止" { try await Task.sleep(for: .milliseconds(20)) }
+        for _ in 0..<100 where model.listenerStates["card|corp:user"] != "已停止" || model.listenerStates[c.id.uuidString] != "监听中" { try await Task.sleep(for: .milliseconds(20)) }
         XCTAssertEqual(model.listenerStates["card|corp:user"], "已停止")
         XCTAssertEqual(model.listenerStates[c.id.uuidString], "监听中")
         _ = await model.stopAll()

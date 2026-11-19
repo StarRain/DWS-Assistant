@@ -20,7 +20,7 @@ final class CoreTests: XCTestCase {
         return try IMEvent(line: String(decoding: data, as: UTF8.self))
     }
     func temporaryStore() throws -> JSONStore {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("dashboard-tests-\(UUID())")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("assistant-tests-\(UUID())")
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
         return try JSONStore(directory: url)
     }

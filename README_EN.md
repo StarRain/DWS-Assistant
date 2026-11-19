@@ -17,7 +17,7 @@
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-456bf4"></a>
 </p>
 
-DWS Assistant is a native macOS app that connects to DingTalk through [DingTalk Workspace CLI (DWS)](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli). It uses locally installed AI engines to process messages and reply in the original chat using your account. The app includes a dashboard, a menu bar panel, and a standalone quick panel.
+DWS Assistant is a native macOS app that connects to DingTalk through [DingTalk Workspace CLI (DWS)](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli). It uses locally installed AI engines to process messages and reply in the original chat using your account. The app includes a main window, a menu bar panel, and a standalone quick panel.
 
 > This version supports one signed-in DingTalk account, with group and direct chats. You turn on the assistant manually after signing in.
 
@@ -35,7 +35,7 @@ Captured in preview mode. Account details, chats and statistics are sample data.
 - Control listening and automatic replies separately for each group or contact.
 - Groups default to **Only when you mention yourself**. You can also reply when anyone mentions you, or to incoming messages.
 - Filters assistant replies and deduplicates events. Stopping the assistant or disabling listening cancels the corresponding tasks.
-- Detects authorization changes. Signing out through the dashboard or DWS CLI stops the assistant and returns to the sign-in page.
+- Detects authorization changes. Signing out through the app or DWS CLI stops the assistant and returns to the sign-in page.
 
 ### AI replies and interactive cards
 
@@ -50,14 +50,14 @@ Captured in preview mode. Account details, chats and statistics are sample data.
 
 - Define reply guidelines or task steps for each chat. There is no limit on the number of rules; each rule supports up to 2,000 characters.
 - Add and edit rules in a separate dialog. Enable, edit or delete them from the list, or clone selected rules from another chat as independent copies.
-- Each DingTalk group or direct chat maps to its own Codex chat in `~/.dws-dashboard/codex/`. Model and reasoning changes apply on the next turn of the same chat.
+- Each DingTalk group or direct chat maps to its own Codex chat in `~/.dws-assistant/codex/`. Model and reasoning changes apply on the next turn of the same chat.
 - Open **History** on a Codex chat row to read messages, replies and execution records, refresh them or load earlier records. Viewing history does not start an AI task.
 - Customize the Codex chat name, or leave it blank to use the group or contact name.
 - Authorized directories are empty by default. You can add multiple directories and configure execution permissions separately.
 
 ### macOS experience
 
-- English and Simplified Chinese interfaces, defaulting to **Simplified Chinese**. Switch instantly in **Settings → Interface language**, or use the language selector on the sign-in page.
+- English and Simplified Chinese interfaces, defaulting to **Simplified Chinese**. Switch instantly in **Settings → Language**, or use the language selector on the sign-in page.
 - Light, dark and system appearance, with consistent vector icons.
 - Control the assistant and view statistics and recent activity from the menu bar or quick panel.
 - Closing the main window hides the Dock icon while keeping the menu bar and running services available.
@@ -78,7 +78,7 @@ DingTalk group / direct chat
 
 DWS handles authorization, messages and reactions. DWS Assistant manages chat settings and task state, reusing the local AI adapters from a pinned DWS version. Gemini retains its existing local CLI adapter. For `custom`, enter a headless launch command in chat settings; it is passed unchanged to the official DWS `agent-cmd` adapter, which appends the message as the last argument and uses stdout as the reply. Model, permissions and memory for custom Agents belong in the command or Agent configuration. Complex launch logic should be placed in a wrapper script, following the pinned DWS command parsing behavior. The app does not move your installed tools or change their global configuration.
 
-The `dsh` channel uses a separate digital-employee binding and host lifecycle. It is not available in this personal-account dashboard.
+The `dsh` channel uses a separate digital-employee binding and host lifecycle. It is not available in this personal-account app.
 
 ## Installation
 
@@ -120,7 +120,7 @@ Run `bash scripts/build-dmg.sh` to build the app and create a DMG for the curren
 ## Usage
 
 1. Open the app and check DWS installation on the setup page. Click **Sign in** to complete the official DingTalk authorization flow.
-2. Open **Groups** or **Direct chats**, click **Add group** or **Add contact**, then search and select a chat.
+2. Open **Groups** or **Chat**, click **Add group** or **Add chat**, then search and select a chat.
 3. Enable listening and automatic replies. Choose a trigger, reply format and AI engine. Add authorized directories when the AI needs to read a project.
 4. To define reply style or task steps, open **AI reply settings → Custom rules**. Save the chat settings after editing rules.
 5. Turn on **DWS Assistant** at the bottom left. You can close the main window and keep using the menu bar. **Stop assistant and quit** stops the services, waits for cleanup, then exits.
@@ -152,25 +152,29 @@ After switching to dedicated storage, the first reply creates a new Codex chat w
 
 ### Settings and rule priority
 
-Messages pass the dashboard's programmatic checks before the AI is called. The engine then runs with its configured settings and interprets applicable custom rules. **Programmatic controls and actual engine permissions take precedence over custom rules.**
+Messages pass the app's programmatic checks before the AI is called. The engine then runs with its configured settings and interprets applicable custom rules. **Programmatic controls and actual engine permissions take precedence over custom rules.**
 
 | Layer | Includes | Conflict behavior |
 | --- | --- | --- |
-| Dashboard controls | Listening switch, reply trigger, recipient, reply format, timeouts | Enforced by code; text rules cannot override them |
+| App controls | Listening switch, reply trigger, recipient, reply format, timeouts | Enforced by code; text rules cannot override them |
 | Engine configuration and permissions | Model, reasoning level, execution permissions and directory parameters | Applied through engine arguments or APIs; rules cannot elevate actual permissions |
-| Text instructions | Custom rules, default language and reply style, task steps | Interpreted by the AI; there is currently no universal conflict checker or fixed resolution order between custom rules and default text instructions, or between multiple rules |
+| Custom rules | Applicable reply requirements, information handling, workflows and behavior limits | Take precedence over default text instructions; conflicting rules require clarification |
+| Default text instructions | Default language, reply style and task planning | Apply only when consistent with the applicable rules |
 
-For example, if the dashboard is set to **When anyone mentions you**, a rule saying “only reply when I mention myself” does not prevent another person's mention from entering the AI processing flow. Do not rely on a text rule for strict identity filtering. Select **Only when you mention yourself** in the dashboard to filter before calling the AI.
+For example, if the app is set to **When anyone mentions you**, a rule saying “only reply when I mention myself” does not prevent another person's mention from entering the AI processing flow. Do not rely on a text rule for strict identity filtering. Select **Only when you mention yourself** in the app to filter before calling the AI.
 
-Likewise, a rule saying “run the build script” does not grant write access. Configure the necessary directories and execution permissions in the dashboard, and avoid contradictory rules.
+Likewise, a rule saying “run the build script” does not grant write access. Configure the necessary directories and execution permissions in the app, and avoid contradictory rules.
 
-The selected AI engine handles tasks using the current request and enabled rules. The dashboard does not prescribe build or script workflows, or add content-based script reviews or blocks. The host delivers the automatic reply; that does not prohibit uploads, publishing or notifications explicitly required by the task itself. Directory authorization, actual engine permissions and timeouts still apply.
+With enabled rules, the assistant is instructed to perform only the processing required by applicable rules and the necessary steps, without adding tasks or substituting its own approach. Global reply constraints remain active; conditional rules apply only when their conditions are met. Rules are not all treated as the same kind of task. Specified steps, tools, parameters, formats, destinations and delivery methods must be preserved. Work delegated to an existing tool or workflow must use its specified entry point, without reconstructing or resending partial results. Missing applicable rules, missing information, conflicting rules or execution failures require clarification rather than skipped steps, silent fallbacks or reruns.
+
+These general constraints accompany enabled rules on each turn. Natural-language rules are still interpreted by the engine, not programmatically verified for every operation. With no enabled rules, the existing behavior is retained. The app does not prescribe business workflows or add content-based script reviews or blocks. The host returns the automatic reply, while rule-defined deliverables remain with the designated workflow. Directory authorization, actual engine permissions and timeouts still apply.
 
 ## Data and permissions
 
-- The app is named DWS Assistant, with Bundle ID `com.starrain.dwsassistant`. The rename keeps the existing data directory.
-- Dashboard data lives in `~/.dws-dashboard`, including configuration, activity logs, delivery records and engine chat mappings.
-- Codex message content, execution records, databases, runtime logs and writer locks live in `~/.dws-dashboard/codex/`, separate from authorized project directories and desktop Codex history.
+- Codex offers Read only, Ask for approval, Auto-review, and Full access. Existing full/relaxed settings retain auto-review and are never upgraded silently. Native approval requests can be handled in either a DingTalk card or the assistant panel; a single decision returns to the waiting engine request without replaying the task. Commands and file changes receive one-time approval; permission grants last only for the current turn. Requests expire within 90 seconds or the remaining task deadline, and stop being valid when the task stops or its configuration changes. Ordinary AI confirmation forms do not grant engine permissions.
+- The app is named DWS Assistant, with Bundle ID `com.starrain.dwsassistant`. Upgrades preserve existing settings and chat records.
+- App data lives in `~/.dws-assistant`, including configuration, activity logs, delivery records and engine chat mappings. On upgrade, the complete `~/.dws-dashboard` store is moved to the new location. The old path remains as a compatibility symlink; an existing destination is never overwritten. Chat bindings migrate to the `assistant` namespace without creating new chats. New cards use the new protocol, while previously sent cards remain compatible.
+- Codex message content, execution records, databases, runtime logs and writer locks live in `~/.dws-assistant/codex/`, separate from authorized project directories and desktop Codex history.
 - DWS and AI engines keep their own sign-in state. The app does not migrate their credentials.
 - The dedicated Codex directory links to existing configuration, sign-in files, rules, skills and other inputs. It does not copy old chats or share desktop databases or writer locks.
 - Authorized directories are empty by default. Adding a directory does not elevate execution permissions. The directory list is not a complete file-reading sandbox; actual access depends on the engine's permissions.
@@ -198,7 +202,7 @@ open -n "dist/DWS Assistant.app" --args --preview --data-dir /tmp/dws-assistant-
 ```
 
 ```text
-Sources/DashboardCore       Configuration, commands, event routing and persistence
+Sources/AssistantCore       Configuration, commands, event routing and persistence
 Sources/DWSAssistant        SwiftUI interface, localization and task coordination
 Integrations/DWSBridge      Official DWS AI adapter wrapper and tests
 Tests                      Swift regression tests
