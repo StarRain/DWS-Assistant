@@ -26,7 +26,7 @@ info={
  'CFBundleLocalizations':['en','zh-Hans'],
  'CFBundleName':'DWS Assistant', 'CFBundleExecutable':'DWSAssistant',
  'CFBundleIdentifier':'com.starrain.dwsassistant', 'CFBundlePackageType':'APPL',
- 'CFBundleShortVersionString':'1.0.0', 'CFBundleVersion':'1',
+ 'CFBundleShortVersionString':'1.0.1', 'CFBundleVersion':'2',
  'LSMinimumSystemVersion':'14.0', 'NSHighResolutionCapable':True,
  'NSPrincipalClass':'NSApplication', 'CFBundleIconFile':'AppIcon',
  'NSHumanReadableCopyright':'DWS Assistant · Includes DWS CLI components under Apache-2.0'

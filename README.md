@@ -11,7 +11,7 @@
 <p align="center"><a href="#安装">安装与构建</a> · <a href="docs/CONFIGURATION.md">配置说明</a> · <a href="https://github.com/StarRain/DWS-Assistant/issues">问题反馈</a></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-v1.0.0-456bf4">
+  <img alt="Version" src="https://img.shields.io/badge/version-v1.0.1-456bf4">
   <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%2014%2B-10172f">
   <img alt="SwiftUI" src="https://img.shields.io/badge/UI-SwiftUI-456bf4">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-456bf4"></a>
@@ -83,14 +83,14 @@ DWS 负责授权、消息收发和表情操作。DWS助手管理会话配置与�
 
 ### 下载 DMG
 
-从 [GitHub Releases](https://github.com/StarRain/DWS-Assistant/releases/latest) 下载 **DWS-Assistant-1.0.0-arm64.dmg**。当前安装包适用于 **Apple Silicon（M 系列芯片）和 macOS 14 或更高版本**。
+从 [GitHub Releases](https://github.com/StarRain/DWS-Assistant/releases/latest) 下载 **DWS-Assistant-1.0.1-arm64.dmg**。当前安装包适用于 **Apple Silicon（M 系列芯片）和 macOS 14 或更高版本**。
 
 打开 DMG，将 **DWS Assistant.app** 拖入 **Applications**，再从“应用程序”文件夹启动。DWS CLI 和 AI 引擎仍需单独安装并登录。
 
 此版本使用 ad hoc 签名，尚未经过 Apple 公证。首次打开若被 macOS 拦截，可在「系统设置 → 隐私与安全性」中对本次下载选择「仍要打开」。发布页同时提供 `.sha256` 校验文件，下载到同一目录后可验证：
 
 ```sh
-shasum -a 256 -c DWS-Assistant-1.0.0-arm64.dmg.sha256
+shasum -a 256 -c DWS-Assistant-1.0.1-arm64.dmg.sha256
 ```
 
 ### 环境要求

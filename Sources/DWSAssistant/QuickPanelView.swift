@@ -32,7 +32,7 @@ struct QuickPanelView: AssistantLocalizedView {
                         .font(.system(size: 11)).foregroundStyle(AssistantTheme.secondary).lineLimit(1)
                 }
                 Spacer()
-                Text("v1.0.0").font(.system(size: 10)).foregroundStyle(AssistantTheme.muted)
+                Text("v1.0.1").font(.system(size: 10)).foregroundStyle(AssistantTheme.muted)
             }
 
             VStack(alignment: .leading, spacing: 13) {

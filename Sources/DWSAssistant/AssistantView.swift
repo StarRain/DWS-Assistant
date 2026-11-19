@@ -127,7 +127,7 @@ struct AssistantView: AssistantLocalizedView {
                     .help(l("查看账号详情或退出登录"))
             }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
                 .background(AssistantTheme.card, in: RoundedRectangle(cornerRadius: 14))
-            Text("v1.0.0").font(.system(size: 10)).foregroundStyle(AssistantTheme.muted)
+            Text("v1.0.1").font(.system(size: 10)).foregroundStyle(AssistantTheme.muted)
                 .padding(.horizontal, 16).padding(.bottom, 16)
         }.padding(.horizontal, 16).frame(width: 224)
             .background(AssistantTheme.sidebar).foregroundStyle(AssistantTheme.text)

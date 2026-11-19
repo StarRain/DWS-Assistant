@@ -11,7 +11,7 @@
 <p align="center"><a href="#installation">Build and install</a> · <a href="#usage">Usage</a> · <a href="https://github.com/StarRain/DWS-Assistant/issues">Report an issue</a></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-v1.0.0-456bf4">
+  <img alt="Version" src="https://img.shields.io/badge/version-v1.0.1-456bf4">
   <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%2014%2B-10172f">
   <img alt="SwiftUI" src="https://img.shields.io/badge/UI-SwiftUI-456bf4">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-456bf4"></a>
@@ -84,14 +84,14 @@ The `dsh` channel uses a separate digital-employee binding and host lifecycle. I
 
 ### Download the DMG
 
-Download **DWS-Assistant-1.0.0-arm64.dmg** from [GitHub Releases](https://github.com/StarRain/DWS-Assistant/releases/latest). This package requires **Apple Silicon (M-series chips) and macOS 14 or later**.
+Download **DWS-Assistant-1.0.1-arm64.dmg** from [GitHub Releases](https://github.com/StarRain/DWS-Assistant/releases/latest). This package requires **Apple Silicon (M-series chips) and macOS 14 or later**.
 
 Open the DMG, drag **DWS Assistant.app** to **Applications**, then launch it from Applications. DWS CLI and an AI engine must still be installed and signed in to separately.
 
 This release is ad hoc signed and has not been notarized by Apple. If macOS blocks the first launch, use **System Settings → Privacy & Security → Open Anyway** for this download. The release also includes a `.sha256` checksum file. Download both files to the same directory and verify them with:
 
 ```sh
-shasum -a 256 -c DWS-Assistant-1.0.0-arm64.dmg.sha256
+shasum -a 256 -c DWS-Assistant-1.0.1-arm64.dmg.sha256
 ```
 
 ### Requirements
