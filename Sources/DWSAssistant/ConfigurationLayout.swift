@@ -22,7 +22,7 @@ struct ConfigurationRow<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 11)
             .overlay(alignment: .top) {
-                if divided { DashboardTheme.separator.frame(height: 0.5).allowsHitTesting(false) }
+                if divided { AssistantTheme.separator.frame(height: 0.5).allowsHitTesting(false) }
             }
     }
 }
@@ -33,7 +33,7 @@ struct ConfigurationGroup<Content: View>: View {
         VStack(spacing: 0) { content }
             .padding(.horizontal, 14)
             .labeledContentStyle(ConfigurationLabelStyle())
-            .background(DashboardTheme.form, in: RoundedRectangle(cornerRadius: 15))
+            .background(AssistantTheme.form, in: RoundedRectangle(cornerRadius: 15))
     }
 }
 
@@ -74,8 +74,8 @@ struct ConfigurationSection<Content: View>: View {
     }
 }
 
-struct DashboardDivider: View {
+struct AssistantDivider: View {
     var body: some View {
-        DashboardTheme.separator.frame(height: 0.5).accessibilityHidden(true)
+        AssistantTheme.separator.frame(height: 0.5).accessibilityHidden(true)
     }
 }

@@ -1,5 +1,5 @@
 import SwiftUI
-import DashboardCore
+import AssistantCore
 
 /// Keep interpolation values separate from translation keys. User names,
 /// identifiers and rule contents are never used as localization keys.
@@ -85,8 +85,8 @@ struct UILocalizer {
     }
 }
 
-protocol DashboardLocalizedView: View { var locale: Locale { get } }
-extension DashboardLocalizedView {
+protocol AssistantLocalizedView: View { var locale: Locale { get } }
+extension AssistantLocalizedView {
     func l(_ message: UIMessage) -> String { UILocalizer(locale: locale).text(message) }
     func tr(_ key: String) -> String { UILocalizer(locale: locale).label(key) }
     func diagnostic(_ source: String) -> String { UILocalizer(locale: locale).diagnostic(source) }
@@ -100,9 +100,9 @@ struct TranslatedText: View {
     var body: some View { Text(UILocalizer(locale: locale).diagnostic(value)) }
 }
 
-struct LanguagePicker: DashboardLocalizedView {
+struct LanguagePicker: AssistantLocalizedView {
     @Environment(\.locale) var locale
-    @EnvironmentObject var model: DashboardModel
+    @EnvironmentObject var model: AssistantModel
     var body: some View {
         Picker(l("语言"), selection: Binding(get: { model.config.language }, set: model.setLanguage)) {
             Text("简体中文").tag(AppLanguage.simplifiedChinese)

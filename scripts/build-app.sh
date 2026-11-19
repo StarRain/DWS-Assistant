@@ -38,7 +38,7 @@ for language, name in [('en', 'DWS Assistant'), ('zh-Hans', 'DWS助手')]:
     (directory/'InfoPlist.strings').write_text(f'"CFBundleDisplayName" = "{name}";\n"CFBundleName" = "{name}";\n')
 PY
 export CLANG_MODULE_CACHE_PATH="$root/.build/clang-cache"
-xcrun swiftc Sources/DWSAssistant/DashboardBrand.swift scripts/make-icon.swift -o "$root/.build/make-icon"
+xcrun swiftc Sources/DWSAssistant/AssistantBrand.swift scripts/make-icon.swift -o "$root/.build/make-icon"
 "$root/.build/make-icon" "$root/.build/AppIcon.iconset"
 iconutil -c icns .build/AppIcon.iconset -o "$app/Contents/Resources/AppIcon.icns"
 codesign --force --sign - "$app/Contents/Helpers/dws-assistant-bridge"

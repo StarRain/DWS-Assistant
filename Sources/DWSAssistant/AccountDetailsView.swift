@@ -1,8 +1,8 @@
 import SwiftUI
 
-struct AccountDetailsView: DashboardLocalizedView {
+struct AccountDetailsView: AssistantLocalizedView {
     @Environment(\.locale) var locale
-    @EnvironmentObject var model: DashboardModel
+    @EnvironmentObject var model: AssistantModel
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingLogout = false
 
@@ -22,17 +22,17 @@ struct AccountDetailsView: DashboardLocalizedView {
                     VStack(alignment: .leading, spacing: 18) {
                         HStack(spacing: 8) {
                             Image(systemName: model.accountOK ? "checkmark.seal.fill" : "person.crop.circle.badge.questionmark")
-                                .foregroundStyle(model.accountOK ? Color.green : DashboardTheme.secondary)
+                                .foregroundStyle(model.accountOK ? Color.green : AssistantTheme.secondary)
                             Text(tr(model.accountTitle)).font(.system(size: 13, weight: .semibold))
                             Spacer()
                             if model.refreshing || model.loggingOut { ProgressView().controlSize(.small) }
                             else if model.accountOK { Text(l("当前钉钉账号")).font(.caption).foregroundStyle(.secondary) }
                         }
                         if let profile = model.profile {
-                            DashboardDivider()
+                            AssistantDivider()
                             HStack(alignment: .top, spacing: 14) {
                                 Image(systemName: "person.crop.circle.fill").font(.system(size: 34))
-                                    .foregroundStyle(DashboardTheme.accent).frame(width: 40, height: 40)
+                                    .foregroundStyle(AssistantTheme.accent).frame(width: 40, height: 40)
                                 VStack(alignment: .leading, spacing: 12) {
                                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                                         Text(profile.name).font(.headline).fixedSize()
@@ -62,8 +62,8 @@ struct AccountDetailsView: DashboardLocalizedView {
                 }.padding(.horizontal, 24).padding(.bottom, 24)
             }
         }.frame(width: 600, height: 360)
-            .foregroundStyle(DashboardTheme.text).tint(DashboardTheme.action)
-            .background(DashboardTheme.background)
+            .foregroundStyle(AssistantTheme.text).tint(AssistantTheme.action)
+            .background(AssistantTheme.background)
             .confirmationDialog(l("退出当前钉钉账号？"), isPresented: $confirmingLogout, titleVisibility: .visible) {
                 Button(l("退出登录"), role: .destructive) { Task { await model.logout() } }
                 Button(l("取消"), role: .cancel) {}

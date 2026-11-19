@@ -5,14 +5,14 @@ let package = Package(
     name: "DWSAssistant",
     platforms: [.macOS(.v14)],
     products: [
-        .library(name: "DashboardCore", targets: ["DashboardCore"]),
+        .library(name: "AssistantCore", targets: ["AssistantCore"]),
         .executable(name: "DWSAssistant", targets: ["DWSAssistant"])
     ],
     targets: [
-        .target(name: "DashboardCore"),
-        .executableTarget(name: "DWSAssistant", dependencies: ["DashboardCore"], resources: [.process("Resources")]),
-        .testTarget(name: "DashboardCoreTests", dependencies: ["DashboardCore"]),
-        .testTarget(name: "DashboardAppTests", dependencies: ["DWSAssistant", "DashboardCore"])
+        .target(name: "AssistantCore"),
+        .executableTarget(name: "DWSAssistant", dependencies: ["AssistantCore"], resources: [.process("Resources")]),
+        .testTarget(name: "AssistantCoreTests", dependencies: ["AssistantCore"]),
+        .testTarget(name: "AssistantAppTests", dependencies: ["DWSAssistant", "AssistantCore"])
     ],
     swiftLanguageModes: [.v5]
 )

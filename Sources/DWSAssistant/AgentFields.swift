@@ -1,10 +1,10 @@
 import SwiftUI
 import AppKit
-import DashboardCore
+import AssistantCore
 
-struct AgentFields: DashboardLocalizedView {
+struct AgentFields: AssistantLocalizedView {
     @Environment(\.locale) var locale
-    @EnvironmentObject var model: DashboardModel
+    @EnvironmentObject var model: AssistantModel
     @Binding var value: AgentSettings
     var defaultSessionTitle = "DWS 会话"
     var conversationID: UUID?
@@ -41,11 +41,11 @@ struct AgentFields: DashboardLocalizedView {
                         .help(diagnostic(metadataError ?? metadata.detail))
                     ZStack {
                         Button { refresh += 1 } label: { Image(systemName: "arrow.clockwise").frame(width: 20, height: 20) }
-                            .buttonStyle(.plain).foregroundStyle(DashboardTheme.accent)
+                            .buttonStyle(.plain).foregroundStyle(AssistantTheme.accent)
                             .help(l("刷新模型与强度")).disabled(loading).opacity(loading ? 0 : 1)
                         if loading { ProgressView().controlSize(.mini).accessibilityLabel(l("正在刷新模型与强度")) }
                     }.frame(width: 20, height: 20)
-                }.font(.caption).foregroundStyle(DashboardTheme.muted)
+                }.font(.caption).foregroundStyle(AssistantTheme.muted)
             }.padding(.horizontal, 10)
             ConfigurationGroup {
                 ConfigurationRow(divided: false) {
@@ -56,7 +56,7 @@ struct AgentFields: DashboardLocalizedView {
                     .task(id: "\(value.engine.rawValue)|\(value.workdir)|\(refresh)") { await loadMetadata() }
                     if value.engine != .custom && model.detectedPaths[value.engine.rawValue] == "未找到" {
                         Text(l("未检测到 \(value.engine.title)，请先安装并完成登录。"))
-                            .font(.caption).foregroundStyle(DashboardTheme.muted)
+                            .font(.caption).foregroundStyle(AssistantTheme.muted)
                     }
                 }
                 if value.engine == .custom {
@@ -66,9 +66,9 @@ struct AgentFields: DashboardLocalizedView {
                             .textFieldStyle(.roundedBorder).font(.body.monospaced())
                             .accessibilityLabel(l("自定义 Agent 启动命令"))
                         Text(l("使用无头、单次执行命令。DWS 将消息追加为最后一个参数，并把标准输出作为回复。"))
-                            .font(.caption).foregroundStyle(DashboardTheme.muted)
+                            .font(.caption).foregroundStyle(AssistantTheme.muted)
                         Text(l("模型和权限请在启动命令或 Agent 自身配置中设置；也可使用本地模型。"))
-                            .font(.caption).foregroundStyle(DashboardTheme.muted)
+                            .font(.caption).foregroundStyle(AssistantTheme.muted)
                     }
                 } else {
                     ConfigurationRow {
@@ -76,7 +76,7 @@ struct AgentFields: DashboardLocalizedView {
                             LabeledContent(l("模型")) {
                                 TextField(l("留空跟随引擎"), text: $value.model).textFieldStyle(.plain).multilineTextAlignment(.trailing)
                             }
-                            if !metadata.defaultModel.isEmpty { Text(l("当前默认模型：\(metadata.defaultModel)")).font(.caption).foregroundStyle(DashboardTheme.muted) }
+                            if !metadata.defaultModel.isEmpty { Text(l("当前默认模型：\(metadata.defaultModel)")).font(.caption).foregroundStyle(AssistantTheme.muted) }
                         } else {
                             LabeledContent(l("模型")) {
                                 Picker(l("模型"), selection: modelSelection) {
@@ -116,19 +116,19 @@ struct AgentFields: DashboardLocalizedView {
                                 .accessibilityLabel(l("Codex 会话名称"))
                         }
                         Text(l("留空使用默认名称，下次回复时同步到 Codex。"))
-                            .font(.caption).foregroundStyle(DashboardTheme.muted)
+                            .font(.caption).foregroundStyle(AssistantTheme.muted)
                     }
                 }
                 ConfigurationRow {
                     Button { showingRules = true } label: {
                         HStack(spacing: 12) {
-                            Text(l("自定义规则")).foregroundStyle(DashboardTheme.text)
+                            Text(l("自定义规则")).foregroundStyle(AssistantTheme.text)
                             Spacer()
                             Text(value.rules.isEmpty ? l("添加规则") : l("\(value.rules.filter(\.enabled).count) / \(value.rules.count) 条已开启"))
                             Image(systemName: "chevron.right").font(.caption.weight(.semibold))
                         }.contentShape(Rectangle())
-                    }.buttonStyle(.plain).foregroundStyle(DashboardTheme.accent)
-                    Text(l("设置此会话的回复约定或任务步骤。")).font(.caption).foregroundStyle(DashboardTheme.muted)
+                    }.buttonStyle(.plain).foregroundStyle(AssistantTheme.accent)
+                    Text(l("设置此会话的回复约定或任务步骤。")).font(.caption).foregroundStyle(AssistantTheme.muted)
                 }
                 ConfigurationRow {
                     HStack {
@@ -138,16 +138,16 @@ struct AgentFields: DashboardLocalizedView {
                     }
                     ForEach(value.authorizedDirectories, id: \.self) { path in
                         HStack(spacing: 8) {
-                            Image(systemName: "folder").foregroundStyle(DashboardTheme.muted)
-                            Text(DashboardPaths.display(path)).font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
-                                .help(DashboardPaths.display(path))
+                            Image(systemName: "folder").foregroundStyle(AssistantTheme.muted)
+                            Text(AssistantPaths.display(path)).font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
+                                .help(AssistantPaths.display(path))
                             Spacer()
                             Button { value.authorizedDirectories.removeAll { $0 == path } } label: { Image(systemName: "minus.circle") }
                                 .buttonStyle(.plain).help(l("移除此授权目录"))
                         }
                     }
                     Text(value.engine.supportsAdditionalDirectories ? l("可添加允许 AI 读取的目录，支持多个目录。") : l("程序在此目录启动；留空使用独立工作目录。"))
-                        .font(.caption).foregroundStyle(DashboardTheme.muted)
+                        .font(.caption).foregroundStyle(AssistantTheme.muted)
                 }
                 if value.engine != .custom {
                     ConfigurationRow {
@@ -155,7 +155,7 @@ struct AgentFields: DashboardLocalizedView {
                             Picker(l("执行权限"), selection: $value.permission) { ForEach(ExecutionPermission.allCases) { Text(tr($0.title)).tag($0) } }.configurationPicker()
                         }
                         Text(value.permission == .full ? l("允许引擎按其原生权限执行操作；Codex 可写所选目录。目录列表不构成文件读取沙箱。") : l("Codex 只读，Qoder 关闭工具；其他引擎沿用原生权限。目录列表不构成文件读取沙箱。"))
-                            .font(.caption).foregroundStyle(DashboardTheme.muted)
+                            .font(.caption).foregroundStyle(AssistantTheme.muted)
                     }
                 }
                 ConfigurationRow {
@@ -172,7 +172,7 @@ struct AgentFields: DashboardLocalizedView {
                         Spacer()
                         Stepper(l("单次执行超时"), value: $value.timeout, in: 10...900, step: 10).labelsHidden()
                     }
-                    Text(l("这些设置仅用于当前会话，不修改本机引擎配置。")).font(.caption).foregroundStyle(DashboardTheme.muted)
+                    Text(l("这些设置仅用于当前会话，不修改本机引擎配置。")).font(.caption).foregroundStyle(AssistantTheme.muted)
                 }
             }
         }

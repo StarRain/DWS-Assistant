@@ -1,12 +1,12 @@
 import Foundation
-import DashboardCore
+import AssistantCore
 
 /// Serializes progress writes and drains the last in-flight request before the
 /// caller publishes a terminal card. An uncertain write stops the task once.
 @MainActor
 final class CardProgressUpdates {
     private let reference: AICardReference
-    private let config: DashboardConfig
+    private let config: AssistantConfig
     private let checkCurrent: @MainActor () throws -> Void
     private let interval: Duration
     private let buffer = AgentProgressBuffer()
@@ -16,7 +16,7 @@ final class CardProgressUpdates {
     private(set) var uncertain = false
     var snapshot: AgentExecutionProgress { buffer.snapshot }
 
-    init(reference: AICardReference, config: DashboardConfig, interval: Duration = .milliseconds(750), checkCurrent: @escaping @MainActor () throws -> Void) {
+    init(reference: AICardReference, config: AssistantConfig, interval: Duration = .milliseconds(750), checkCurrent: @escaping @MainActor () throws -> Void) {
         self.reference = reference; self.config = config; self.interval = interval; self.checkCurrent = checkCurrent
     }
 
@@ -38,14 +38,14 @@ final class CardProgressUpdates {
                     sending = true; writing = true
                     let receipt = try await ProcessRunner.run(update)
                     guard try AICardReply.updateAccepted(receipt, reference: reference) else {
-                        throw DashboardError.command("执行进度更新结果待确认，已停止本次处理")
+                        throw AssistantError.command("执行进度更新结果待确认，已停止本次处理")
                     }
                     revision = snapshot.revision
                     writing = false
                 } catch {
                     if ended && !sending { return }
                     if sending && !Task.isCancelled { uncertain = true }
-                    failure = sending ? DashboardError.command("执行进度更新结果待确认，已停止本次处理，不会自动重试") : error
+                    failure = sending ? AssistantError.command("执行进度更新结果待确认，已停止本次处理，不会自动重试") : error
                     job.cancel(failure!)
                     return
                 }

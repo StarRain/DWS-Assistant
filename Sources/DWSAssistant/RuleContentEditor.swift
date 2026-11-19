@@ -49,8 +49,8 @@ struct RuleContentEditor: NSViewRepresentable {
         paragraph.lineBreakStrategy = []
         editor.defaultParagraphStyle = paragraph
         editor.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
-        editor.textColor = NSColor(DashboardTheme.text)
-        editor.insertionPointColor = NSColor(DashboardTheme.accent)
+        editor.textColor = NSColor(AssistantTheme.text)
+        editor.insertionPointColor = NSColor(AssistantTheme.accent)
         editor.typingAttributes = [.paragraphStyle: paragraph, .font: editor.font!, .foregroundColor: editor.textColor!]
         editor.allowsUndo = true
         editor.isAutomaticQuoteSubstitutionEnabled = false

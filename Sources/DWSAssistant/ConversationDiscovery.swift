@@ -1,9 +1,9 @@
 import SwiftUI
-import DashboardCore
+import AssistantCore
 
-struct ConversationDiscovery: DashboardLocalizedView {
+struct ConversationDiscovery: AssistantLocalizedView {
     @Environment(\.locale) var locale
-    @EnvironmentObject var model: DashboardModel
+    @EnvironmentObject var model: AssistantModel
     @Environment(\.dismiss) private var dismiss
     let kind: ConversationKind
     @State private var query = ""
@@ -33,10 +33,10 @@ struct ConversationDiscovery: DashboardLocalizedView {
                     Button { dismiss() } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
                         .buttonStyle(.plain).keyboardShortcut(.cancelAction).help(l("关闭搜索"))
                 }.padding(22)
-                DashboardDivider()
+                AssistantDivider()
                 if keyword.isEmpty {
                     VStack(spacing: 12) {
-                        DashboardGlyph(kind: kind == .group ? .groups : .contacts, size: 34).foregroundStyle(.secondary)
+                        AssistantGlyph(kind: kind == .group ? .groups : .contacts, size: 34).foregroundStyle(.secondary)
                         Text(l("输入\(noun)名称，选择结果后配置并添加")).foregroundStyle(.secondary)
                     }.frame(maxWidth: .infinity, minHeight: 180)
                 } else {
@@ -46,9 +46,9 @@ struct ConversationDiscovery: DashboardLocalizedView {
                                 let added = model.conversations.contains { $0.kind == kind && $0.stableID == item.id }
                                 Button { configure(item) } label: {
                                     HStack(spacing: 12) {
-                                        DashboardGlyph(kind: kind == .group ? .groups : .contacts)
-                                            .foregroundStyle(DashboardTheme.accent).frame(width: 38, height: 38)
-                                            .background(DashboardTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
+                                        AssistantGlyph(kind: kind == .group ? .groups : .contacts)
+                                            .foregroundStyle(AssistantTheme.accent).frame(width: 38, height: 38)
+                                            .background(AssistantTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
                                         VStack(alignment: .leading, spacing: 5) {
                                             Text(item.name).font(.system(size: 14, weight: .medium))
                                             Text(item.id).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
@@ -67,8 +67,8 @@ struct ConversationDiscovery: DashboardLocalizedView {
                     }.frame(height: 310)
                     if !items.isEmpty && !detail.isEmpty { Text(diagnostic(detail)).font(.caption).foregroundStyle(.secondary).padding(.bottom, 12) }
                 }
-            }.frame(width: 620).background(DashboardTheme.card).foregroundStyle(DashboardTheme.text).tint(DashboardTheme.action)
-                .dashboardInputFocus()
+            }.frame(width: 620).background(AssistantTheme.card).foregroundStyle(AssistantTheme.text).tint(AssistantTheme.action)
+                .assistantInputFocus()
                 .task(id: query) {
                     items = []; cursor = nil; cursors = []; detail = ""
                     guard !keyword.isEmpty else { loading = false; return }

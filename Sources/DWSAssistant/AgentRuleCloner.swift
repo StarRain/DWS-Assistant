@@ -1,7 +1,7 @@
 import SwiftUI
-import DashboardCore
+import AssistantCore
 
-struct AgentRuleCloner: DashboardLocalizedView {
+struct AgentRuleCloner: AssistantLocalizedView {
     @Environment(\.locale) var locale
     private static let panelWidth: CGFloat = 640
     @Environment(\.dismiss) private var dismiss
@@ -46,25 +46,25 @@ struct AgentRuleCloner: DashboardLocalizedView {
                                     HStack {
                                         Text(rule.name).font(.headline)
                                         Spacer()
-                                        Text(rule.enabled ? l("已开启") : l("未开启")).font(.caption).foregroundStyle(DashboardTheme.muted)
+                                        Text(rule.enabled ? l("已开启") : l("未开启")).font(.caption).foregroundStyle(AssistantTheme.muted)
                                     }
-                                    Text(rule.content).font(.body).foregroundStyle(DashboardTheme.secondary)
+                                    Text(rule.content).font(.body).foregroundStyle(AssistantTheme.secondary)
                                         .lineLimit(3).help(rule.content)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                             }.toggleStyle(.checkbox).padding(14)
-                                .background(DashboardTheme.form, in: RoundedRectangle(cornerRadius: 12))
+                                .background(AssistantTheme.form, in: RoundedRectangle(cornerRadius: 12))
                         }
                     }
                 }
             } else {
                 Text(l("选择一个群聊或私聊，查看其中的规则。"))
-                    .foregroundStyle(DashboardTheme.muted)
+                    .foregroundStyle(AssistantTheme.muted)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             HStack(spacing: 16) {
                 Text(l("克隆后可独立编辑；完成后需保存会话配置。"))
-                    .font(.caption).foregroundStyle(DashboardTheme.muted)
+                    .font(.caption).foregroundStyle(AssistantTheme.muted)
                 Spacer(minLength: 0)
                 Button(l("克隆 \(selected.count) 条规则")) {
                     apply(AgentRules.cloned(rules.filter { selected.contains($0.id) }))
@@ -73,8 +73,8 @@ struct AgentRuleCloner: DashboardLocalizedView {
             }
         }
         .padding(22).frame(width: Self.panelWidth, height: 520)
-        .background(DashboardTheme.background).foregroundStyle(DashboardTheme.text).tint(DashboardTheme.action)
-        .dashboardInputFocus()
+        .background(AssistantTheme.background).foregroundStyle(AssistantTheme.text).tint(AssistantTheme.action)
+        .assistantInputFocus()
         .onChange(of: sourceID) { _, _ in selected.removeAll() }
     }
 }

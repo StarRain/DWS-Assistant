@@ -1,7 +1,7 @@
 import Foundation
-import DashboardCore
+import AssistantCore
 
-extension DashboardModel {
+extension AssistantModel {
     func recordAgentDiagnostics(_ result: CommandResult, conversation: Conversation) {
         let output = (try? JSONSerialization.jsonObject(with: Data(result.stdout.utf8))) as? [String: Any]
         if output?["session_recreated"] as? Bool == true {

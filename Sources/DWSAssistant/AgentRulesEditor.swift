@@ -1,7 +1,7 @@
 import SwiftUI
-import DashboardCore
+import AssistantCore
 
-struct AgentRulesEditor: DashboardLocalizedView {
+struct AgentRulesEditor: AssistantLocalizedView {
     @Environment(\.locale) var locale
     @Environment(\.dismiss) private var dismiss
     @State private var rules: [AgentRule]
@@ -27,16 +27,16 @@ struct AgentRulesEditor: DashboardLocalizedView {
                     Button(l("添加规则"), action: addRule)
                 }
                 Text(l("为当前会话约定回复方式或任务步骤，AI 会按请求使用已开启的规则。"))
-                    .font(.caption).foregroundStyle(DashboardTheme.muted)
+                    .font(.caption).foregroundStyle(AssistantTheme.muted)
             }.padding(22)
-            DashboardDivider()
+            AssistantDivider()
             if rules.isEmpty {
                 VStack(spacing: 12) {
-                    Image(systemName: "text.alignleft").font(.system(size: 28)).foregroundStyle(DashboardTheme.accent)
-                        .padding(18).background(DashboardTheme.subtle, in: RoundedRectangle(cornerRadius: 16))
+                    Image(systemName: "text.alignleft").font(.system(size: 28)).foregroundStyle(AssistantTheme.accent)
+                        .padding(18).background(AssistantTheme.subtle, in: RoundedRectangle(cornerRadius: 16))
                     Text(l("还没有自定义规则")).font(.headline)
                     Text(l("添加回复要求或任务步骤，让 AI 按你的约定处理消息。"))
-                        .font(.caption).foregroundStyle(DashboardTheme.muted)
+                        .font(.caption).foregroundStyle(AssistantTheme.muted)
                     Button(l("添加第一条规则"), action: addRule).buttonStyle(.borderedProminent).padding(.top, 4)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -53,14 +53,14 @@ struct AgentRulesEditor: DashboardLocalizedView {
                     }
                 }
             }
-            DashboardDivider()
+            AssistantDivider()
             VStack(alignment: .leading, spacing: 10) {
                 if let error { Text(diagnostic(error)).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
                 HStack(alignment: .center, spacing: 20) {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(l("共 \(rules.count) 条规则 · \(rules.filter(\.enabled).count) 条已开启"))
                         Text(l("完成后需保存会话配置；规则遵循授权目录和执行权限。"))
-                    }.font(.caption).foregroundStyle(DashboardTheme.muted)
+                    }.font(.caption).foregroundStyle(AssistantTheme.muted)
                     Spacer(minLength: 0)
                     Button(l("取消")) { dismiss() }.keyboardShortcut(.cancelAction)
                     Button(l("完成"), action: finish).buttonStyle(.borderedProminent)
@@ -68,8 +68,8 @@ struct AgentRulesEditor: DashboardLocalizedView {
             }.padding(20)
         }
         .frame(width: 640, height: 610)
-        .background(DashboardTheme.background).foregroundStyle(DashboardTheme.text).tint(DashboardTheme.action)
-        .dashboardInputFocus()
+        .background(AssistantTheme.background).foregroundStyle(AssistantTheme.text).tint(AssistantTheme.action)
+        .assistantInputFocus()
         .onChange(of: rules) { _, _ in error = nil }
         .sheet(item: $editingRule) { rule in
             AgentRuleEditor(value: rule, isNew: !rules.contains { $0.id == rule.id }) { saved in
@@ -96,11 +96,11 @@ struct AgentRulesEditor: DashboardLocalizedView {
                         .foregroundStyle(.red)
                 }.fixedSize()
             }
-            Text(rule.wrappedValue.content).font(.body).foregroundStyle(DashboardTheme.secondary)
+            Text(rule.wrappedValue.content).font(.body).foregroundStyle(AssistantTheme.secondary)
                 .lineLimit(3).fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled).help(rule.wrappedValue.content)
-        }.padding(16).background(DashboardTheme.form, in: RoundedRectangle(cornerRadius: 15))
+        }.padding(16).background(AssistantTheme.form, in: RoundedRectangle(cornerRadius: 15))
     }
 
     private func addRule() { editingRule = AgentRule() }
@@ -123,7 +123,7 @@ struct AgentRulesEditor: DashboardLocalizedView {
     }
 }
 
-struct AgentRuleEditor: DashboardLocalizedView {
+struct AgentRuleEditor: AssistantLocalizedView {
     @Environment(\.locale) var locale
     @Environment(\.dismiss) private var dismiss
     @State var value: AgentRule
@@ -149,19 +149,19 @@ struct AgentRuleEditor: DashboardLocalizedView {
                     Spacer()
                     Text("\(value.content.count) / \(AgentRules.maximumContentLength)")
                         .font(.caption).monospacedDigit()
-                        .foregroundStyle(value.content.count > AgentRules.maximumContentLength ? Color.red : DashboardTheme.muted)
+                        .foregroundStyle(value.content.count > AgentRules.maximumContentLength ? Color.red : AssistantTheme.muted)
                 }
                 ZStack(alignment: .topLeading) {
                     if value.content.isEmpty {
                         Text(l("描述这条规则的适用场景、回复要求或任务步骤。\n例如：回答时先给结论，再分点说明；信息不完整时先询问。"))
-                            .foregroundStyle(DashboardTheme.muted).padding(.horizontal, 5).padding(.vertical, 8)
+                            .foregroundStyle(AssistantTheme.muted).padding(.horizontal, 5).padding(.vertical, 8)
                             .allowsHitTesting(false)
                     }
                     RuleContentEditor(text: $value.content)
                         .padding(.vertical, 4).accessibilityLabel(l("规则内容"))
                 }
                 .font(.body).frame(minHeight: 180).padding(8)
-                .background(DashboardTheme.form, in: RoundedRectangle(cornerRadius: 10))
+                .background(AssistantTheme.form, in: RoundedRectangle(cornerRadius: 10))
             }
             HStack(alignment: .center, spacing: 16) {
                 if let error { Text(diagnostic(error)).font(.caption).foregroundStyle(.red) }
@@ -170,8 +170,8 @@ struct AgentRuleEditor: DashboardLocalizedView {
             }
         }
         .padding(22).frame(width: 600, height: 440)
-        .background(DashboardTheme.background).foregroundStyle(DashboardTheme.text).tint(DashboardTheme.action)
-        .dashboardInputFocus()
+        .background(AssistantTheme.background).foregroundStyle(AssistantTheme.text).tint(AssistantTheme.action)
+        .assistantInputFocus()
         .onChange(of: value) { _, _ in error = nil }
     }
 

@@ -1,11 +1,11 @@
 import SwiftUI
 import AppKit
-import DashboardCore
+import AssistantCore
 
-struct QuickPanelView: DashboardLocalizedView {
+struct QuickPanelView: AssistantLocalizedView {
     @Environment(\.locale) var locale
     let prepareToOpenMainWindow: () -> Void
-    @EnvironmentObject private var model: DashboardModel
+    @EnvironmentObject private var model: AssistantModel
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
 
@@ -23,15 +23,15 @@ struct QuickPanelView: DashboardLocalizedView {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                Image(nsImage: DashboardBrand.appIcon).resizable().frame(width: 34, height: 34)
+                Image(nsImage: AssistantBrand.appIcon).resizable().frame(width: 34, height: 34)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(l("DWS助手")).font(.system(size: 14, weight: .semibold))
                     Text(model.accountOK ? model.profile?.name ?? l("已登录") : l("尚未登录"))
-                        .font(.system(size: 11)).foregroundStyle(DashboardTheme.secondary).lineLimit(1)
+                        .font(.system(size: 11)).foregroundStyle(AssistantTheme.secondary).lineLimit(1)
                 }
                 Spacer()
-                Text("v1.0.0").font(.system(size: 10)).foregroundStyle(DashboardTheme.muted)
+                Text("v1.0.0").font(.system(size: 10)).foregroundStyle(AssistantTheme.muted)
             }
 
             VStack(alignment: .leading, spacing: 13) {
@@ -45,10 +45,10 @@ struct QuickPanelView: DashboardLocalizedView {
                     .disabled(model.preview || model.needsSetup || model.refreshing || model.loggingOut || model.stopping || !model.conversationBusy.isEmpty || model.storageFailure != nil || (!model.personalRunning && (!model.accountOK || enabledCount == 0)))
                 }
                 HStack(spacing: 6) {
-                    Circle().fill(model.personalRunning ? Color.green : DashboardTheme.muted).frame(width: 5, height: 5)
-                    Text(serviceDetail).font(.system(size: 10)).foregroundStyle(DashboardTheme.secondary)
+                    Circle().fill(model.personalRunning ? Color.green : AssistantTheme.muted).frame(width: 5, height: 5)
+                    Text(serviceDetail).font(.system(size: 10)).foregroundStyle(AssistantTheme.secondary)
                 }
-                DashboardDivider()
+                AssistantDivider()
                 HStack(spacing: 0) {
                     statistic(l("监听中"), value: model.listeningCount)
                     statistic(l("处理中"), value: model.replyStates.count)
@@ -70,15 +70,15 @@ struct QuickPanelView: DashboardLocalizedView {
                             Text(activity.date, format: .dateTime.hour().minute()).font(.system(size: 10)).monospacedDigit()
                         }
                         Image(systemName: "chevron.right").font(.system(size: 9))
-                    }.foregroundStyle(DashboardTheme.secondary)
+                    }.foregroundStyle(AssistantTheme.secondary)
                     if let failure = model.storageFailure ?? model.notice {
                         Text(diagnostic(failure)).font(.system(size: 11)).foregroundStyle(.red).lineLimit(2)
                     } else if let activity = model.activities.first {
                         Text(diagnostic(activity.message)).font(.system(size: 11))
-                            .foregroundStyle(activity.level == "错误" ? Color.red : DashboardTheme.text).lineLimit(2)
+                            .foregroundStyle(activity.level == "错误" ? Color.red : AssistantTheme.text).lineLimit(2)
                     } else {
                         Text(l("暂无动态，开启助手后可在这里查看状态。"))
-                            .font(.system(size: 11)).foregroundStyle(DashboardTheme.secondary)
+                            .font(.system(size: 11)).foregroundStyle(AssistantTheme.secondary)
                     }
                 }.frame(maxWidth: .infinity, minHeight: 48, alignment: .topLeading)
                     .padding(13).card().contentShape(Rectangle())
@@ -91,45 +91,45 @@ struct QuickPanelView: DashboardLocalizedView {
             }
             HStack {
                 Button(l("打开主面板")) { showPage("overview") }
-                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(DashboardTheme.accent)
+                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(AssistantTheme.accent)
                 Spacer()
                 Button(l("关闭助手并退出")) { NSApp.terminate(nil) }
-                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(DashboardTheme.secondary)
+                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(AssistantTheme.secondary)
             }.padding(.top, 2)
         }
         .padding(18).frame(width: 360)
-        .foregroundStyle(DashboardTheme.text).tint(DashboardTheme.action)
-        .background(DashboardTheme.background)
+        .foregroundStyle(AssistantTheme.text).tint(AssistantTheme.action)
+        .background(AssistantTheme.background)
         .preferredColorScheme(model.config.appearance.colorScheme)
     }
 
     private func statistic(_ title: String, value: Int) -> some View {
         VStack(spacing: 5) {
             Text(value.formatted()).font(.system(size: 22, weight: .semibold, design: .rounded)).monospacedDigit()
-            Text(title).font(.system(size: 10)).foregroundStyle(DashboardTheme.secondary)
+            Text(title).font(.system(size: 10)).foregroundStyle(AssistantTheme.secondary)
         }.frame(maxWidth: .infinity)
     }
 
-    private func conversationShortcut(_ title: String, page: String, kind: ConversationKind, icon: DashboardIcon.Kind) -> some View {
+    private func conversationShortcut(_ title: String, page: String, kind: ConversationKind, icon: AssistantIcon.Kind) -> some View {
         Button { showPage(page) } label: {
             HStack(spacing: 9) {
-                DashboardGlyph(kind: icon, size: 20).foregroundStyle(DashboardTheme.accent)
+                AssistantGlyph(kind: icon, size: 20).foregroundStyle(AssistantTheme.accent)
                 Text(title).font(.system(size: 12, weight: .medium))
                 Spacer(minLength: 4)
                 Text("\(model.conversations.filter { $0.kind == kind }.count)")
-                    .font(.system(size: 12, weight: .medium)).monospacedDigit().foregroundStyle(DashboardTheme.secondary)
+                    .font(.system(size: 12, weight: .medium)).monospacedDigit().foregroundStyle(AssistantTheme.secondary)
             }.padding(13).frame(maxWidth: .infinity).card().contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
 
-    private func shortcut(_ title: String, page: String, icon: DashboardIcon.Kind) -> some View {
+    private func shortcut(_ title: String, page: String, icon: AssistantIcon.Kind) -> some View {
         Button { showPage(page) } label: {
             HStack(spacing: 6) {
-                DashboardGlyph(kind: icon, size: 16)
+                AssistantGlyph(kind: icon, size: 16)
                 Text(title).font(.system(size: 11, weight: .medium))
             }.frame(maxWidth: .infinity, minHeight: 34)
-                .foregroundStyle(DashboardTheme.accent)
-                .background(DashboardTheme.subtle, in: RoundedRectangle(cornerRadius: 8))
+                .foregroundStyle(AssistantTheme.accent)
+                .background(AssistantTheme.subtle, in: RoundedRectangle(cornerRadius: 8))
                 .contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
@@ -143,7 +143,7 @@ struct QuickPanelView: DashboardLocalizedView {
     }
 }
 
-struct QuickPanelCommand: DashboardLocalizedView {
+struct QuickPanelCommand: AssistantLocalizedView {
     @Environment(\.locale) var locale
     @Environment(\.openWindow) private var openWindow
 

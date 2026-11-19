@@ -1,7 +1,7 @@
 import SwiftUI
-import DashboardCore
+import AssistantCore
 
-struct ConversationHistoryView: DashboardLocalizedView {
+struct ConversationHistoryView: AssistantLocalizedView {
     @Environment(\.locale) var locale
     @Environment(\.dismiss) private var dismiss
     let conversation: Conversation
@@ -14,7 +14,7 @@ struct ConversationHistoryView: DashboardLocalizedView {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
-                Image(systemName: "clock.arrow.circlepath").font(.title2).foregroundStyle(DashboardTheme.accent)
+                Image(systemName: "clock.arrow.circlepath").font(.title2).foregroundStyle(AssistantTheme.accent)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(l("会话历史")).font(.title3.weight(.semibold))
                     Text(conversation.title).font(.callout).foregroundStyle(.secondary).lineLimit(1)
@@ -47,12 +47,12 @@ struct ConversationHistoryView: DashboardLocalizedView {
             HStack {
                 Label(l("只读查看，不启动 AI"), systemImage: "eye").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Text(DashboardPaths.display(dataDirectory.appendingPathComponent("codex").path))
+                Text(AssistantPaths.display(dataDirectory.appendingPathComponent("codex").path))
                     .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
             }.padding(.horizontal, 22).padding(.vertical, 14)
         }
         .frame(minWidth: 740, idealWidth: 840, maxWidth: 1000, minHeight: 520, idealHeight: 680)
-        .background(DashboardTheme.background)
+        .background(AssistantTheme.background)
         .task { await reload() }
     }
 
@@ -61,7 +61,7 @@ struct ConversationHistoryView: DashboardLocalizedView {
             HStack {
                 Label(entry.kind == .user ? l("用户消息") : entry.kind == .assistant ? l("AI 回复") : l("执行记录"),
                       systemImage: entry.kind == .user ? "person.crop.circle" : entry.kind == .assistant ? "sparkles" : "terminal")
-                    .font(.caption.weight(.semibold)).foregroundStyle(entry.kind == .user ? DashboardTheme.accent : DashboardTheme.secondary)
+                    .font(.caption.weight(.semibold)).foregroundStyle(entry.kind == .user ? AssistantTheme.accent : AssistantTheme.secondary)
                 Spacer()
                 Text(displayDate(entry.timestamp)).font(.caption.monospaced()).foregroundStyle(.secondary)
             }
@@ -74,7 +74,7 @@ struct ConversationHistoryView: DashboardLocalizedView {
                 }.font(.caption)
             }
         }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-            .background(entry.kind == .user ? DashboardTheme.accent.opacity(0.06) : DashboardTheme.card, in: RoundedRectangle(cornerRadius: 12))
+            .background(entry.kind == .user ? AssistantTheme.accent.opacity(0.06) : AssistantTheme.card, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func displayDate(_ value: String) -> String {
