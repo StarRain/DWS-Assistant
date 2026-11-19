@@ -60,7 +60,7 @@ struct SetupView: AssistantLocalizedView {
                         .font(.caption).foregroundStyle(AssistantTheme.secondary)
                 }
                 Spacer(minLength: 8)
-                badge(model.dwsInstalled ? l("已检测到") : l("未安装"), ready: model.dwsInstalled)
+                badge(model.dwsInstalled ? l("已安装") : l("未安装"), ready: model.dwsInstalled)
             }
             HStack {
                 if model.dwsInstalled, let path = model.detectedPaths["dws"] {
@@ -149,7 +149,7 @@ struct SetupView: AssistantLocalizedView {
                         .font(.caption).foregroundStyle(AssistantTheme.secondary)
                 }
                 Spacer(minLength: 8)
-                Text(l("\(model.installedEngines.count) 个已检测到")).font(.caption).foregroundStyle(AssistantTheme.secondary)
+                Text(l("\(model.installedEngines.count) 个已安装")).font(.caption).foregroundStyle(AssistantTheme.secondary)
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 10) {
                 ForEach(Engine.installedCLIEngines) { engine in

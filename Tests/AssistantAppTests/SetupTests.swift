@@ -25,7 +25,7 @@ final class SetupTests: XCTestCase {
     """#
 
     private func fixture(installed: Bool, status: String = #"{"authenticated":false}"#, completed: Bool = false) throws -> (AssistantModel, URL) {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("dashboard-setup-" + UUID().uuidString)
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("assistant-setup-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
         try status.write(to: dir.appendingPathComponent("status.json"), atomically: true, encoding: .utf8)

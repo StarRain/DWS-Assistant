@@ -46,6 +46,7 @@ final class AssistantModel: ObservableObject {
     @Published var notice: String?
     @Published var selection = "overview"
     @Published var detectedPaths: [String: String] = [:]
+    let cliTools = CLIToolsModel()
     private var engineDetectionID = UUID()
     @Published var loginAtStartup = false
     @Published var storageFailure: String?
@@ -80,7 +81,7 @@ final class AssistantModel: ObservableObject {
     private var accountRefreshRequested = false
     private let authWatchDirectories: [URL]
 
-    var hasActiveWork: Bool { personalRunning || startupTask != nil || loggingIn || loggingOut || !listeners.isEmpty || !replyTasks.isEmpty || !feedbackTasks.isEmpty }
+    var hasActiveWork: Bool { cliTools.isChangingTools || personalRunning || startupTask != nil || loggingIn || loggingOut || !listeners.isEmpty || !replyTasks.isEmpty || !feedbackTasks.isEmpty }
     var needsSetup: Bool { !preview && (!config.setupCompleted || !dwsInstalled || !accountOK || storageFailure != nil) }
     var dwsInstalled: Bool { detectedPaths["dws"].map { $0 != "未找到" } ?? false }
     var installedEngines: [Engine] { Engine.installedCLIEngines.filter { detectedPaths[$0.rawValue].map { $0 != "未找到" } ?? false } }
@@ -469,6 +470,7 @@ final class AssistantModel: ObservableObject {
 
     func stopAll() async -> Bool {
         stopPersonal(); cancelLogin()
+        await cliTools.waitForOperation()
         for _ in 0..<150 where stopping || loggingIn || loggingOut { try? await Task.sleep(for: .milliseconds(100)) }
         let complete = !stopping && !loggingIn && !loggingOut
         if complete { log("DWS助手已关闭") }
@@ -477,6 +479,7 @@ final class AssistantModel: ObservableObject {
     }
 
     func startPersonal() {
+        guard !cliTools.isChangingTools else { notice = "工具正在安装或更新，请完成后再开启助手服务。"; return }
         guard !preview, storageFailure == nil, !personalRunning, startupTask == nil, !stopping, conversationBusy.isEmpty, listeners.isEmpty, replyTasks.isEmpty else { return }
         notice = nil
         do {

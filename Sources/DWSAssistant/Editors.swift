@@ -129,21 +129,7 @@ struct SettingsView: AssistantLocalizedView {
                 Spacer()
                 LanguagePicker()
             }.padding(24).frame(maxWidth: .infinity, alignment: .leading).card()
-            sectionTitle(l("本机工具"), detail: l("自动检测已安装的工具，并使用现有登录状态"))
-            VStack(alignment: .leading, spacing: 18) {
-                ForEach((model.dwsInstalled ? ["dws"] : []) + model.installedEngines.map(\.rawValue), id: \.self) { name in
-                    HStack(spacing: 12) {
-                        Image(systemName: name == "dws" ? "bubble.left.and.bubble.right" : "sparkles").font(.title3).frame(width: 30)
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(name == "dws" ? l("钉钉 DWS") : Engine(rawValue: name)?.title ?? name).font(.headline)
-                            Text(name == "dws" ? l("登录钉钉、监听消息、发送个人回复") : l("可在会话配置中选用的 AI 引擎")).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text(l("已检测到")).font(.caption).foregroundStyle(.green)
-                    }
-                }
-                Text(l("每个会话只需选择一个 AI 引擎；检测到程序不代表已完成该引擎的登录。")).font(.caption).foregroundStyle(.secondary)
-            }.padding(24).frame(maxWidth: .infinity, alignment: .leading).card()
+            CLIToolsView(tools: model.cliTools)
             sectionTitle(l("图片缓存"), detail: l("只在识别图片时临时使用，处理结束自动清理"))
             VStack(alignment: .leading, spacing: 10) {
                 HStack { Text(l("总量上限")).font(.headline); Spacer(); Text("64 MB").fontWeight(.medium) }
